@@ -194,64 +194,58 @@ func (d *Pan123) login() error {
 //	return &authKey, nil
 //}
 
-func generateRandomHeaders() map[string]string {
-    // Define OS and versions
-    android := map[string]interface{}{
-        "os":   "Android",
-        "vers": []string{"13.0.3", "14.0.0", "14.0.5"},
-    }
-    ios := map[string]interface{}{
-        "os":   "iOS",
-        "vers": []string{"12.0", "13.4", "14.0", "15.0"},
+// 初始化随机数种子
+func init() {
+    rand.Seed(time.Now().UnixNano())
+}
+
+// 生成随机HTTP头函数
+func generateRandomHeaders() (map[string]string, error) {
+    // 定义操作系统和版本
+    deviceOS := []struct {
+        brand    string
+        os       string
+        versions []string
+    }{
+        {"Apple", "iOS", []string{"12.0", "13.4", "14.0", "15.0"}},
+        {"Xiaomi", "Android", []string{"13.0.3", "14.0.0", "14.0.5"}},
+        {"Samsung", "Android", []string{"13.0.3", "14.0.0", "14.0.5"}},
+        {"Google", "Android", []string{"13.0.3", "14.0.0", "14.0.5"}},
+        {"Oneplus", "Android", []string{"13.0.3", "14.0.0", "14.0.5"}},
+        {"Vivo", "Android", []string{"13.0.3", "14.0.0", "14.0.5"}},
+        {"Oppo", "Android", []string{"13.0.3", "14.0.0", "14.0.5"}},
     }
 
-    // Define device brands
-    devices := map[string]map[string]interface{}{
-        "Apple":   ios,
-        "Xiaomi":  android,
-        "Samsung": android,
-        "Google":  android,
-        "Oneplus": android,
-        "Vivo":    android,
-        "Oppo":    android,
-    }
+    // 定义应用版本
+    appXVersions := []string{"2.4.7", "2.5.0", "2.5.2", "2.5.3", "2.5.4", "2.5.5"}
+    appVersions := []string{"62", "76", "77", "78"}
 
-    // Define app versions
-    appXVersions := []string{
-        "2.4.7", "2.5.0", "2.5.2", "2.5.3", "2.5.4", "2.5.5",
-    }
-    appVersions := []string{
-        "62", "76", "77", "78",
-    }
-
-    // Randomly select app version
+    // 随机选择应用版本
     appXVer := appXVersions[rand.Intn(len(appXVersions))]
-    appVer := appVersions[findIndex(appXVersions, appXVer)]
-
-    // Randomly select device brand and OS
-    brands := make([]string, 0, len(devices))
-    for brand := range devices {
-        brands = append(brands, brand)
+    appVerIndex := findIndex(appXVersions, appXVer)
+    if appVerIndex == -1 || appVerIndex >= len(appVersions) {
+        return nil, fmt.Errorf("Invalid app version index found")
     }
-    brand := brands[rand.Intn(len(brands))]
-    device := devices[brand]
+    appVer := appVersions[appVerIndex]
 
-    os := device["os"].(string)
-    versions := device["vers"].([]string)
-    osVersion := versions[rand.Intn(len(versions))]
+    // 随机选择设备品牌和操作系统
+    selectedDevice := deviceOS[rand.Intn(len(deviceOS))]
+    osVersion := selectedDevice.versions[rand.Intn(len(selectedDevice.versions))]
 
-    // Generate User-Agent
-    userAgent := fmt.Sprintf("123pan/v%s (%s_%s;%s)", appXVer, os, osVersion, brand)
+    // 生成 User-Agent 字符串
+    userAgent := fmt.Sprintf("123pan/v%s (%s_%s;%s)", appXVer, selectedDevice.os, osVersion, selectedDevice.brand)
 
-    // Return headers
-    return map[string]string{
+    // 返回 HTTP 请求头
+    headers := map[string]string{
         "origin":        "https://www.123pan.com",
         "referer":       "https://www.123pan.com/",
         "user-agent":    userAgent,
         "app-version":   appVer,
-        "platform":      strings.ToLower(os),
+        "platform":      strings.ToLower(selectedDevice.os),
         "x-app-version": appXVer,
     }
+
+    return headers, nil
 }
 
 // Helper function to find index of a string in a slice
