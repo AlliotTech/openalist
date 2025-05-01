@@ -194,23 +194,83 @@ func (d *Pan123) login() error {
 //	return &authKey, nil
 //}
 
+func generateRandomHeaders() map[string]string {
+    // Define OS and versions
+    android := map[string]interface{}{
+        "os":   "Android",
+        "vers": []string{"13.0.3", "14.0.0", "14.0.5"},
+    }
+    ios := map[string]interface{}{
+        "os":   "iOS",
+        "vers": []string{"12.0", "13.4", "14.0", "15.0"},
+    }
+
+    // Define device brands
+    devices := map[string]map[string]interface{}{
+        "Apple":   ios,
+        "Xiaomi":  android,
+        "Samsung": android,
+        "Google":  android,
+        "Oneplus": android,
+        "Vivo":    android,
+        "Oppo":    android,
+    }
+
+    // Define app versions
+    appXVersions := []string{
+        "2.4.7","2.5.0", "2.5.2","2.5.3", "2.5.4", "2.5.5"
+    }
+    appVersions := []string{
+       "62", "76", "77", "78"
+    }
+
+    // Randomly select app version
+    appXVer := appXVersions[rand.Intn(len(appXVersions))]
+    appVer := appVersions[findIndex(appXVersions, appXVer)]
+
+    // Randomly select device brand and OS
+    brands := make([]string, 0, len(devices))
+    for brand := range devices {
+        brands = append(brands, brand)
+    }
+    brand := brands[rand.Intn(len(brands))]
+    device := devices[brand]
+
+    os := device["os"].(string)
+    versions := device["vers"].([]string)
+    osVersion := versions[rand.Intn(len(versions))]
+
+    // Generate User-Agent
+    userAgent := fmt.Sprintf("123pan/v%s (%s_%s;%s)", appXVer, os, osVersion, brand)
+
+    // Return headers
+    return map[string]string{
+        "origin":        "https://www.123pan.com",
+        "referer":       "https://www.123pan.com/",
+        "user-agent":    userAgent,
+        "app-version":   appVer,
+        "platform":      strings.ToLower(os),
+        "x-app-version": appXVer,
+    }
+}
+
+// Helper function to find index of a string in a slice
+func findIndex(slice []string, value string) int {
+    for i, v := range slice {
+        if v == value {
+            return i
+        }
+    }
+    return -1
+}
+
 func (d *Pan123) Request(url string, method string, callback base.ReqCallback, resp interface{}) ([]byte, error) {
 	isRetry := false
 do:
 	req := base.RestyClient.R()
-	req.SetHeaders(map[string]string{
-		"origin":        "https://www.123pan.com",
-		"referer":       "https://www.123pan.com/",
-		"authorization": "Bearer " + d.AccessToken,
-		// "user-agent":    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) alist-client",
-		// "platform":      "web",
-		// "app-version":   "3",
-		"user-agent":    "123pan/v2.5.4(Android_14.0.0;Xiaomi)",
-		"app-version": "77",
-		"platform": "android",
-		"x-app-version": "2.5.4",
-		//"user-agent":    base.UserAgent,
-	})
+	headers := generateRandomHeaders()
+	headers["authorization"] = "Bearer " + d.AccessToken
+	req.SetHeaders(headers)
 	if callback != nil {
 		callback(req)
 	}
