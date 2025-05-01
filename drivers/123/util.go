@@ -218,10 +218,10 @@ func generateRandomHeaders() map[string]string {
 
     // Define app versions
     appXVersions := []string{
-        "2.4.7","2.5.0", "2.5.2","2.5.3", "2.5.4", "2.5.5"
+        "2.4.7", "2.5.0", "2.5.2", "2.5.3", "2.5.4", "2.5.5",
     }
     appVersions := []string{
-       "62", "76", "77", "78"
+        "62", "76", "77", "78",
     }
 
     // Randomly select app version
