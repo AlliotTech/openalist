@@ -222,11 +222,7 @@ func generateRandomHeaders() (map[string]string, error) {
 
     // 随机选择应用版本
     appXVer := appXVersions[rand.Intn(len(appXVersions))]
-    appVerIndex := findIndex(appXVersions, appXVer)
-    if appVerIndex == -1 || appVerIndex >= len(appVersions) {
-        return nil, fmt.Errorf("Invalid app version index found")
-    }
-    appVer := appVersions[appVerIndex]
+    appVer := appVersions[rand.Intn(len(appVersions))]
 
     // 随机选择设备品牌和操作系统
     selectedDevice := deviceOS[rand.Intn(len(deviceOS))]
@@ -248,21 +244,15 @@ func generateRandomHeaders() (map[string]string, error) {
     return headers, nil
 }
 
-// Helper function to find index of a string in a slice
-func findIndex(slice []string, value string) int {
-    for i, v := range slice {
-        if v == value {
-            return i
-        }
-    }
-    return -1
-}
 
 func (d *Pan123) Request(url string, method string, callback base.ReqCallback, resp interface{}) ([]byte, error) {
 	isRetry := false
 do:
 	req := base.RestyClient.R()
-	headers := generateRandomHeaders()
+	headers, err := generateRandomHeaders()
+	if err != nil {
+		return nil, err
+	}
 	headers["authorization"] = "Bearer " + d.AccessToken
 	req.SetHeaders(headers)
 	if callback != nil {
