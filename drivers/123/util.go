@@ -202,9 +202,13 @@ do:
 		"origin":        "https://www.123pan.com",
 		"referer":       "https://www.123pan.com/",
 		"authorization": "Bearer " + d.AccessToken,
-		"user-agent":    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) alist-client",
-		"platform":      "web",
-		"app-version":   "3",
+		// "user-agent":    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) alist-client",
+		// "platform":      "web",
+		// "app-version":   "3",
+		"user-agent":    "123pan/v2.5.4(Android_14.0.0;Xiaomi)",
+		"app-version": "77",
+		"platform": "android",
+		"x-app-version": "2.5.4",
 		//"user-agent":    base.UserAgent,
 	})
 	if callback != nil {
