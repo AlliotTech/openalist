@@ -194,19 +194,67 @@ func (d *Pan123) login() error {
 //	return &authKey, nil
 //}
 
+// 初始化随机数种子
+func init() {
+    rand.Seed(time.Now().UnixNano())
+}
+
+// 生成随机HTTP头函数
+func generateRandomHeaders() (map[string]string, error) {
+    // 定义操作系统和版本
+    deviceOS := []struct {
+        brand    string
+        os       string
+        versions []string
+    }{
+        {"Apple", "iOS", []string{"12.0", "13.4", "14.0", "15.0"}},
+        {"Xiaomi", "Android", []string{"13.0.3", "14.0.0", "14.0.5"}},
+        {"Samsung", "Android", []string{"13.0.3", "14.0.0", "14.0.5"}},
+        {"Google", "Android", []string{"13.0.3", "14.0.0", "14.0.5"}},
+        {"Oneplus", "Android", []string{"13.0.3", "14.0.0", "14.0.5"}},
+        {"Vivo", "Android", []string{"13.0.3", "14.0.0", "14.0.5"}},
+        {"Oppo", "Android", []string{"13.0.3", "14.0.0", "14.0.5"}},
+    }
+
+    // 定义应用版本
+    appXVersions := []string{"2.4.7", "2.5.0", "2.5.2", "2.5.3", "2.5.4", "2.5.5"}
+    appVersions := []string{"62", "76", "77", "78"}
+
+    // 随机选择应用版本
+    appXVer := appXVersions[rand.Intn(len(appXVersions))]
+    appVer := appVersions[rand.Intn(len(appVersions))]
+
+    // 随机选择设备品牌和操作系统
+    selectedDevice := deviceOS[rand.Intn(len(deviceOS))]
+    osVersion := selectedDevice.versions[rand.Intn(len(selectedDevice.versions))]
+
+    // 生成 User-Agent 字符串
+    userAgent := fmt.Sprintf("123pan/v%s (%s_%s;%s)", appXVer, selectedDevice.os, osVersion, selectedDevice.brand)
+
+    // 返回 HTTP 请求头
+    headers := map[string]string{
+        "origin":        "https://www.123pan.com",
+        "referer":       "https://www.123pan.com/",
+        "user-agent":    userAgent,
+        "app-version":   appVer,
+        "platform":      strings.ToLower(selectedDevice.os),
+        "x-app-version": appXVer,
+    }
+
+    return headers, nil
+}
+
+
 func (d *Pan123) Request(url string, method string, callback base.ReqCallback, resp interface{}) ([]byte, error) {
 	isRetry := false
 do:
 	req := base.RestyClient.R()
-	req.SetHeaders(map[string]string{
-		"origin":        "https://www.123pan.com",
-		"referer":       "https://www.123pan.com/",
-		"authorization": "Bearer " + d.AccessToken,
-		"user-agent":    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) alist-client",
-		"platform":      "web",
-		"app-version":   "3",
-		//"user-agent":    base.UserAgent,
-	})
+	headers, err := generateRandomHeaders()
+	if err != nil {
+		return nil, err
+	}
+	headers["authorization"] = "Bearer " + d.AccessToken
+	req.SetHeaders(headers)
 	if callback != nil {
 		callback(req)
 	}
