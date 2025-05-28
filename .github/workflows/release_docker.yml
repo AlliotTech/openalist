@@ -4,17 +4,6 @@ on:
   push:
     tags:
       - "v*"
-    branches:
-      - main
-      - feat/123pan
-  pull_request:
-    branches:
-      - main
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
-
 env:
   REGISTRY: "alliot/alist"
   REGISTRY_USERNAME: "alliot"
@@ -28,7 +17,6 @@ env:
     type=ref,event=branch
     type=ref,event=tag
     type=ref,event=pr
-    type=raw,value=beta,enable={{is_default_branch}}
 
 jobs:
   build_binary:
