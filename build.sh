@@ -93,7 +93,8 @@ BuildDocker() {
 
 PrepareBuildDockerMusl() {
   mkdir -p build/musl-libs
-  BASE="https://musl.cc/"
+  # BASE="https://musl.cc/"
+  BASE="https://musl.nn.ci/"
   FILES=(x86_64-linux-musl-cross aarch64-linux-musl-cross)
   for i in "${FILES[@]}"; do
     url="${BASE}${i}.tgz"
