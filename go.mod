@@ -3,6 +3,8 @@ module github.com/alist-org/alist/v3
 go 1.23.4
 
 require (
+	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.17.0
+	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.6.0
 	github.com/KirCute/ftpserverlib-pasvportmap v1.25.0
 	github.com/KirCute/sftpd-alist v0.0.12
 	github.com/ProtonMail/go-crypto v1.0.0
@@ -32,7 +34,7 @@ require (
 	github.com/gin-gonic/gin v1.10.0
 	github.com/go-resty/resty/v2 v2.14.0
 	github.com/go-webauthn/webauthn v0.11.1
-	github.com/golang-jwt/jwt/v4 v4.5.0
+	github.com/golang-jwt/jwt/v4 v4.5.2
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.3
 	github.com/hekmon/transmissionrpc/v3 v3.0.0
@@ -79,11 +81,7 @@ require (
 	gorm.io/gorm v1.25.11
 )
 
-require (
-	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.17.0 // indirect
-	github.com/Azure/azure-sdk-for-go/sdk/internal v1.10.0 // indirect
-	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.6.0 // indirect
-)
+require github.com/Azure/azure-sdk-for-go/sdk/internal v1.10.0 // indirect
 
 require (
 	github.com/STARRY-S/zip v0.2.1 // indirect
@@ -109,7 +107,6 @@ require (
 	github.com/ipfs/boxo v0.12.0 // indirect
 	github.com/jackc/puddle/v2 v2.2.1 // indirect
 	github.com/klauspost/pgzip v1.2.6 // indirect
-	github.com/kr/text v0.2.0 // indirect
 	github.com/matoous/go-nanoid/v2 v2.1.0 // indirect
 	github.com/microcosm-cc/bluemonday v1.0.27
 	github.com/nwaples/rardecode/v2 v2.0.0-beta.4.0.20241112120701-034e449c6e78
