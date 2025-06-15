@@ -159,15 +159,15 @@ func (d *Pan123) login() error {
 			"remember": true,
 		}
 	}
+
+	// 使用随机生成的请求头
+	headers, err := generateRandomHeaders()
+	if err != nil {
+		return err
+	}
+
 	res, err := base.RestyClient.R().
-		SetHeaders(map[string]string{
-			"origin":      "https://www.123pan.com",
-			"referer":     "https://www.123pan.com/",
-			"user-agent":  "Dart/2.19(dart:io)-alist",
-			"platform":    "web",
-			"app-version": "3",
-			//"user-agent":  base.UserAgent,
-		}).
+		SetHeaders(headers).
 		SetBody(body).Post(SignIn)
 	if err != nil {
 		return err
