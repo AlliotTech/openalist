@@ -5,10 +5,10 @@ import (
 	stdpath "path"
 	"strings"
 
-	"github.com/alist-org/alist/v3/internal/archive/tool"
-	"github.com/alist-org/alist/v3/internal/errs"
-	"github.com/alist-org/alist/v3/internal/model"
-	"github.com/alist-org/alist/v3/internal/stream"
+	"github.com/AlliotTech/openalist/internal/archive/tool"
+	"github.com/AlliotTech/openalist/internal/errs"
+	"github.com/AlliotTech/openalist/internal/model"
+	"github.com/AlliotTech/openalist/internal/stream"
 )
 
 type Zip struct {

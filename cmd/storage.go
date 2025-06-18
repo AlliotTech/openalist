@@ -7,8 +7,8 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/alist-org/alist/v3/internal/db"
-	"github.com/alist-org/alist/v3/pkg/utils"
+	"github.com/AlliotTech/openalist/internal/db"
+	"github.com/AlliotTech/openalist/pkg/utils"
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"

@@ -10,10 +10,10 @@ import (
 	"path"
 	"path/filepath"
 
-	"github.com/alist-org/alist/v3/internal/conf"
-	"github.com/alist-org/alist/v3/internal/fs"
-	"github.com/alist-org/alist/v3/internal/model"
-	"github.com/alist-org/alist/v3/internal/op"
+	"github.com/AlliotTech/openalist/internal/conf"
+	"github.com/AlliotTech/openalist/internal/fs"
+	"github.com/AlliotTech/openalist/internal/model"
+	"github.com/AlliotTech/openalist/internal/op"
 )
 
 // slashClean is equivalent to but slightly more efficient than

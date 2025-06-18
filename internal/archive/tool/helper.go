@@ -7,8 +7,8 @@ import (
 	stdpath "path"
 	"strings"
 
-	"github.com/alist-org/alist/v3/internal/model"
-	"github.com/alist-org/alist/v3/internal/stream"
+	"github.com/AlliotTech/openalist/internal/model"
+	"github.com/AlliotTech/openalist/internal/stream"
 )
 
 type SubFile interface {

@@ -1,15 +1,15 @@
 package handles
 
 import (
-	_115 "github.com/alist-org/alist/v3/drivers/115"
-	"github.com/alist-org/alist/v3/drivers/pikpak"
-	"github.com/alist-org/alist/v3/drivers/thunder"
-	"github.com/alist-org/alist/v3/internal/conf"
-	"github.com/alist-org/alist/v3/internal/model"
-	"github.com/alist-org/alist/v3/internal/offline_download/tool"
-	"github.com/alist-org/alist/v3/internal/op"
-	"github.com/alist-org/alist/v3/internal/task"
-	"github.com/alist-org/alist/v3/server/common"
+	_115 "github.com/AlliotTech/openalist/drivers/115"
+	"github.com/AlliotTech/openalist/drivers/pikpak"
+	"github.com/AlliotTech/openalist/drivers/thunder"
+	"github.com/AlliotTech/openalist/internal/conf"
+	"github.com/AlliotTech/openalist/internal/model"
+	"github.com/AlliotTech/openalist/internal/offline_download/tool"
+	"github.com/AlliotTech/openalist/internal/op"
+	"github.com/AlliotTech/openalist/internal/task"
+	"github.com/AlliotTech/openalist/server/common"
 	"github.com/gin-gonic/gin"
 )
 

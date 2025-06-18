@@ -1,16 +1,16 @@
 package server
 
 import (
-	"github.com/alist-org/alist/v3/cmd/flags"
-	"github.com/alist-org/alist/v3/internal/conf"
-	"github.com/alist-org/alist/v3/internal/message"
-	"github.com/alist-org/alist/v3/internal/sign"
-	"github.com/alist-org/alist/v3/internal/stream"
-	"github.com/alist-org/alist/v3/pkg/utils"
-	"github.com/alist-org/alist/v3/server/common"
-	"github.com/alist-org/alist/v3/server/handles"
-	"github.com/alist-org/alist/v3/server/middlewares"
-	"github.com/alist-org/alist/v3/server/static"
+	"github.com/AlliotTech/openalist/cmd/flags"
+	"github.com/AlliotTech/openalist/internal/conf"
+	"github.com/AlliotTech/openalist/internal/message"
+	"github.com/AlliotTech/openalist/internal/sign"
+	"github.com/AlliotTech/openalist/internal/stream"
+	"github.com/AlliotTech/openalist/pkg/utils"
+	"github.com/AlliotTech/openalist/server/common"
+	"github.com/AlliotTech/openalist/server/handles"
+	"github.com/AlliotTech/openalist/server/middlewares"
+	"github.com/AlliotTech/openalist/server/static"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 )

@@ -7,14 +7,14 @@ import (
 	"io"
 	"time"
 
-	"github.com/alist-org/alist/v3/pkg/http_range"
+	"github.com/AlliotTech/openalist/pkg/http_range"
 	"github.com/pquerna/otp/totp"
 	"github.com/rclone/rclone/lib/readers"
 
-	"github.com/alist-org/alist/v3/internal/driver"
-	"github.com/alist-org/alist/v3/internal/errs"
-	"github.com/alist-org/alist/v3/internal/model"
-	"github.com/alist-org/alist/v3/pkg/utils"
+	"github.com/AlliotTech/openalist/internal/driver"
+	"github.com/AlliotTech/openalist/internal/errs"
+	"github.com/AlliotTech/openalist/internal/model"
+	"github.com/AlliotTech/openalist/pkg/utils"
 	log "github.com/sirupsen/logrus"
 	"github.com/t3rm1n4l/go-mega"
 )

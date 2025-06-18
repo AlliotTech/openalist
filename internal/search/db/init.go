@@ -6,9 +6,9 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/alist-org/alist/v3/internal/conf"
-	"github.com/alist-org/alist/v3/internal/db"
-	"github.com/alist-org/alist/v3/internal/search/searcher"
+	"github.com/AlliotTech/openalist/internal/conf"
+	"github.com/AlliotTech/openalist/internal/db"
+	"github.com/AlliotTech/openalist/internal/search/searcher"
 )
 
 var config = searcher.Config{

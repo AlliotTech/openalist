@@ -1,12 +1,12 @@
 package bootstrap
 
 import (
-	"github.com/alist-org/alist/v3/internal/conf"
-	"github.com/alist-org/alist/v3/internal/db"
-	"github.com/alist-org/alist/v3/internal/fs"
-	"github.com/alist-org/alist/v3/internal/offline_download/tool"
-	"github.com/alist-org/alist/v3/internal/op"
-	"github.com/alist-org/alist/v3/internal/setting"
+	"github.com/AlliotTech/openalist/internal/conf"
+	"github.com/AlliotTech/openalist/internal/db"
+	"github.com/AlliotTech/openalist/internal/fs"
+	"github.com/AlliotTech/openalist/internal/offline_download/tool"
+	"github.com/AlliotTech/openalist/internal/op"
+	"github.com/AlliotTech/openalist/internal/setting"
 	"github.com/xhofe/tache"
 )
 

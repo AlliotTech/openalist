@@ -1,12 +1,12 @@
 package qbit
 
 import (
-	"github.com/alist-org/alist/v3/internal/conf"
-	"github.com/alist-org/alist/v3/internal/errs"
-	"github.com/alist-org/alist/v3/internal/model"
-	"github.com/alist-org/alist/v3/internal/offline_download/tool"
-	"github.com/alist-org/alist/v3/internal/setting"
-	"github.com/alist-org/alist/v3/pkg/qbittorrent"
+	"github.com/AlliotTech/openalist/internal/conf"
+	"github.com/AlliotTech/openalist/internal/errs"
+	"github.com/AlliotTech/openalist/internal/model"
+	"github.com/AlliotTech/openalist/internal/offline_download/tool"
+	"github.com/AlliotTech/openalist/internal/setting"
+	"github.com/AlliotTech/openalist/pkg/qbittorrent"
 	"github.com/pkg/errors"
 )
 

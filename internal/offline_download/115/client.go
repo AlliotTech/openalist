@@ -3,14 +3,14 @@ package _115
 import (
 	"context"
 	"fmt"
-	"github.com/alist-org/alist/v3/internal/conf"
-	"github.com/alist-org/alist/v3/internal/setting"
+	"github.com/AlliotTech/openalist/internal/conf"
+	"github.com/AlliotTech/openalist/internal/setting"
 
-	"github.com/alist-org/alist/v3/drivers/115"
-	"github.com/alist-org/alist/v3/internal/errs"
-	"github.com/alist-org/alist/v3/internal/model"
-	"github.com/alist-org/alist/v3/internal/offline_download/tool"
-	"github.com/alist-org/alist/v3/internal/op"
+	"github.com/AlliotTech/openalist/drivers/115"
+	"github.com/AlliotTech/openalist/internal/errs"
+	"github.com/AlliotTech/openalist/internal/model"
+	"github.com/AlliotTech/openalist/internal/offline_download/tool"
+	"github.com/AlliotTech/openalist/internal/op"
 )
 
 type Cloud115 struct {

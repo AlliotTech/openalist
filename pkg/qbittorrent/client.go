@@ -9,7 +9,7 @@ import (
 	"net/http/cookiejar"
 	"net/url"
 
-	"github.com/alist-org/alist/v3/pkg/utils"
+	"github.com/AlliotTech/openalist/pkg/utils"
 )
 
 type Client interface {

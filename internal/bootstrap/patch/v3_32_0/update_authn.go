@@ -1,9 +1,9 @@
 package v3_32_0
 
 import (
-	"github.com/alist-org/alist/v3/internal/db"
-	"github.com/alist-org/alist/v3/internal/op"
-	"github.com/alist-org/alist/v3/pkg/utils"
+	"github.com/AlliotTech/openalist/internal/db"
+	"github.com/AlliotTech/openalist/internal/op"
+	"github.com/AlliotTech/openalist/pkg/utils"
 )
 
 // UpdateAuthnForOldVersion updates users' authn

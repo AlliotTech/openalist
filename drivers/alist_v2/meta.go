@@ -1,8 +1,8 @@
 package alist_v2
 
 import (
-	"github.com/alist-org/alist/v3/internal/driver"
-	"github.com/alist-org/alist/v3/internal/op"
+	"github.com/AlliotTech/openalist/internal/driver"
+	"github.com/AlliotTech/openalist/internal/op"
 )
 
 type Addition struct {

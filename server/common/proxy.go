@@ -11,11 +11,11 @@ import (
 
 	"maps"
 
-	"github.com/alist-org/alist/v3/internal/model"
-	"github.com/alist-org/alist/v3/internal/net"
-	"github.com/alist-org/alist/v3/internal/stream"
-	"github.com/alist-org/alist/v3/pkg/http_range"
-	"github.com/alist-org/alist/v3/pkg/utils"
+	"github.com/AlliotTech/openalist/internal/model"
+	"github.com/AlliotTech/openalist/internal/net"
+	"github.com/AlliotTech/openalist/internal/stream"
+	"github.com/AlliotTech/openalist/pkg/http_range"
+	"github.com/AlliotTech/openalist/pkg/utils"
 	log "github.com/sirupsen/logrus"
 )
 

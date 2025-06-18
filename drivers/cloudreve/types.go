@@ -3,7 +3,7 @@ package cloudreve
 import (
 	"time"
 
-	"github.com/alist-org/alist/v3/internal/model"
+	"github.com/AlliotTech/openalist/internal/model"
 )
 
 type Resp struct {

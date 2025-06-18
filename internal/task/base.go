@@ -2,8 +2,8 @@ package task
 
 import (
 	"context"
-	"github.com/alist-org/alist/v3/internal/conf"
-	"github.com/alist-org/alist/v3/internal/model"
+	"github.com/AlliotTech/openalist/internal/conf"
+	"github.com/AlliotTech/openalist/internal/model"
 	"github.com/xhofe/tache"
 	"sync"
 	"time"

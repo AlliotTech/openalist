@@ -48,11 +48,11 @@ jobs:
           musl-target-format: $os-$musl-$arch
           out-dir: build
           x-flags: |
-            github.com/alist-org/alist/v3/internal/conf.BuiltAt=$built_at
-            github.com/alist-org/alist/v3/internal/conf.GitAuthor=Xhofe
-            github.com/alist-org/alist/v3/internal/conf.GitCommit=$git_commit
-            github.com/alist-org/alist/v3/internal/conf.Version=$tag
-            github.com/alist-org/alist/v3/internal/conf.WebVersion=dev
+            github.com/AlliotTech/openalist/internal/conf.BuiltAt=$built_at
+            github.com/AlliotTech/openalist/internal/conf.GitAuthor=Xhofe
+            github.com/AlliotTech/openalist/internal/conf.GitCommit=$git_commit
+            github.com/AlliotTech/openalist/internal/conf.Version=$tag
+            github.com/AlliotTech/openalist/internal/conf.WebVersion=dev
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

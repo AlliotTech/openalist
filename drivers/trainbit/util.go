@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/alist-org/alist/v3/drivers/base"
-	"github.com/alist-org/alist/v3/internal/model"
+	"github.com/AlliotTech/openalist/drivers/base"
+	"github.com/AlliotTech/openalist/internal/model"
 )
 
 func get(url string, apiKey string, AUSHELLPORTAL string) (*http.Response, error) {

@@ -1,4 +1,4 @@
-module github.com/alist-org/alist/v3
+module github.com/AlliotTech/openalist
 
 go 1.23.4
 

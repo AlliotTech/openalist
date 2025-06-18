@@ -4,9 +4,9 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/alist-org/alist/v3/internal/conf"
+	"github.com/AlliotTech/openalist/internal/conf"
 
-	"github.com/alist-org/alist/v3/internal/driver"
+	"github.com/AlliotTech/openalist/internal/driver"
 	"github.com/pkg/errors"
 )
 

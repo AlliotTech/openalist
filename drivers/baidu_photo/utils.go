@@ -9,9 +9,9 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/alist-org/alist/v3/drivers/base"
-	"github.com/alist-org/alist/v3/internal/model"
-	"github.com/alist-org/alist/v3/pkg/utils"
+	"github.com/AlliotTech/openalist/drivers/base"
+	"github.com/AlliotTech/openalist/internal/model"
+	"github.com/AlliotTech/openalist/pkg/utils"
 	"github.com/go-resty/resty/v2"
 )
 
