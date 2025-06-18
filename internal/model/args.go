@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/alist-org/alist/v3/pkg/http_range"
-	"github.com/alist-org/alist/v3/pkg/utils"
+	"github.com/AlliotTech/openalist/pkg/http_range"
+	"github.com/AlliotTech/openalist/pkg/utils"
 )
 
 type ListArgs struct {

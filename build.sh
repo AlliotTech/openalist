@@ -20,11 +20,11 @@ echo "frontend version: $webVersion"
 
 ldflags="\
 -w -s \
--X 'github.com/alist-org/alist/v3/internal/conf.BuiltAt=$builtAt' \
--X 'github.com/alist-org/alist/v3/internal/conf.GitAuthor=$gitAuthor' \
--X 'github.com/alist-org/alist/v3/internal/conf.GitCommit=$gitCommit' \
--X 'github.com/alist-org/alist/v3/internal/conf.Version=$version' \
--X 'github.com/alist-org/alist/v3/internal/conf.WebVersion=$webVersion' \
+-X 'github.com/AlliotTech/openalist/internal/conf.BuiltAt=$builtAt' \
+-X 'github.com/AlliotTech/openalist/internal/conf.GitAuthor=$gitAuthor' \
+-X 'github.com/AlliotTech/openalist/internal/conf.GitCommit=$gitCommit' \
+-X 'github.com/AlliotTech/openalist/internal/conf.Version=$version' \
+-X 'github.com/AlliotTech/openalist/internal/conf.WebVersion=$webVersion' \
 "
 
 FetchWebDev() {
@@ -116,7 +116,7 @@ BuildDockerMultiplatform() {
   export CGO_ENABLED=1
 
   OS_ARCHES=(linux-amd64 linux-arm64)
-  CGO_ARGS=(x86_64-linux-musl-gcc aarch64-linux-musl-gcc i486-linux-musl-gcc s390x-linux-musl-gcc riscv64-linux-musl-gcc powerpc64le-linux-musl-gcc)
+  CGO_ARGS=(x86_64-linux-musl-gcc aarch64-linux-musl-gcc i486-linux-musl-gcc s390x-linux-musl-gcc riscv64-linux-musl-gcc)
   for i in "${!OS_ARCHES[@]}"; do
     os_arch=${OS_ARCHES[$i]}
     cgo_cc=${CGO_ARGS[$i]}

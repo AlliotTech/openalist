@@ -1,8 +1,8 @@
 package halalcloud
 
 import (
-	"github.com/alist-org/alist/v3/internal/model"
-	"github.com/alist-org/alist/v3/pkg/utils"
+	"github.com/AlliotTech/openalist/internal/model"
+	"github.com/AlliotTech/openalist/pkg/utils"
 	"github.com/city404/v6-public-rpc-proto/go/v6/common"
 	pubUserFile "github.com/city404/v6-public-rpc-proto/go/v6/userfile"
 	"google.golang.org/grpc"

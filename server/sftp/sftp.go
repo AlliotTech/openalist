@@ -2,10 +2,10 @@ package sftp
 
 import (
 	"github.com/KirCute/sftpd-alist"
-	"github.com/alist-org/alist/v3/internal/errs"
-	"github.com/alist-org/alist/v3/internal/model"
-	"github.com/alist-org/alist/v3/pkg/utils"
-	"github.com/alist-org/alist/v3/server/ftp"
+	"github.com/AlliotTech/openalist/internal/errs"
+	"github.com/AlliotTech/openalist/internal/model"
+	"github.com/AlliotTech/openalist/pkg/utils"
+	"github.com/AlliotTech/openalist/server/ftp"
 	"os"
 )
 

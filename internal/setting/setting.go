@@ -3,7 +3,7 @@ package setting
 import (
 	"strconv"
 
-	"github.com/alist-org/alist/v3/internal/op"
+	"github.com/AlliotTech/openalist/internal/op"
 )
 
 func GetStr(key string, defaultValue ...string) string {

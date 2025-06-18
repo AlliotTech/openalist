@@ -14,8 +14,8 @@ Prerequisites:
 Clone `alist` and `alist-web` anywhere:
 
 ```shell
-$ git clone https://github.com/alist-org/alist.git
-$ git clone --recurse-submodules https://github.com/alist-org/alist-web.git
+$ git clone https://github.com/AlliotTech/openalist.git
+$ git clone --recurse-submodules https://github.com/AlliotTech/openalist-web.git
 ```
 You should switch to the `main` branch for development.
 

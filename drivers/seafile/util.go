@@ -3,13 +3,13 @@ package seafile
 import (
 	"errors"
 	"fmt"
-	"github.com/alist-org/alist/v3/internal/errs"
-	"github.com/alist-org/alist/v3/pkg/utils"
+	"github.com/AlliotTech/openalist/internal/errs"
+	"github.com/AlliotTech/openalist/pkg/utils"
 	"net/http"
 	"strings"
 	"time"
 
-	"github.com/alist-org/alist/v3/drivers/base"
+	"github.com/AlliotTech/openalist/drivers/base"
 	"github.com/go-resty/resty/v2"
 )
 

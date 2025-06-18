@@ -1,7 +1,7 @@
 package db_non_full_text
 
 import (
-	"github.com/alist-org/alist/v3/internal/search/searcher"
+	"github.com/AlliotTech/openalist/internal/search/searcher"
 )
 
 var config = searcher.Config{

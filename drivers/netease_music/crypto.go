@@ -13,8 +13,8 @@ import (
 	"math/big"
 	"strings"
 
-	"github.com/alist-org/alist/v3/pkg/utils"
-	"github.com/alist-org/alist/v3/pkg/utils/random"
+	"github.com/AlliotTech/openalist/pkg/utils"
+	"github.com/AlliotTech/openalist/pkg/utils/random"
 )
 
 var (
