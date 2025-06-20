@@ -41,6 +41,7 @@ https://github.com/AlliotTech/openalist-docs
 
 ## 功能  
 - 原版 Alist 功能  
+- UI优化, 驱动优化  
 - 部分网盘功能增强(自行探索...)
 
 ## 贡献  
