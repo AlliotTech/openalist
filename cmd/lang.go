@@ -39,7 +39,7 @@ func convert(s string) string {
 }
 
 func writeFile(name string, data interface{}) {
-	f, err := os.Open(fmt.Sprintf("../alist-web/src/lang/en/%s.json", name))
+	f, err := os.Open(fmt.Sprintf("../openalist-web/src/lang/en/%s.json", name))
 	if err != nil {
 		log.Errorf("failed to open %s.json: %+v", name, err)
 		return
