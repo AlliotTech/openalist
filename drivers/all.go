@@ -52,7 +52,6 @@ import (
 	_ "github.com/AlliotTech/openalist/drivers/pikpak_share"
 	_ "github.com/AlliotTech/openalist/drivers/quark_uc"
 	_ "github.com/AlliotTech/openalist/drivers/quark_uc_tv"
-	_ "github.com/AlliotTech/openalist/drivers/quqi"
 	_ "github.com/AlliotTech/openalist/drivers/s3"
 	_ "github.com/AlliotTech/openalist/drivers/seafile"
 	_ "github.com/AlliotTech/openalist/drivers/sftp"
