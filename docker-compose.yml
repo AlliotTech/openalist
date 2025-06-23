@@ -1,4 +1,3 @@
-version: '3.3'
 services:
   alist:
     restart: always
@@ -13,4 +12,4 @@ services:
       - UMASK=022
       - TZ=UTC
     container_name: alist
-    image: 'xhofe/alist:latest'
+    image: 'alliot/alist:latest'

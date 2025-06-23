@@ -11,7 +11,7 @@ FROM alpine:edge
 
 ARG INSTALL_FFMPEG=false
 ARG INSTALL_ARIA2=false
-LABEL MAINTAINER="i@nn.ci"
+LABEL MAINTAINER="Alliot"
 
 WORKDIR /opt/alist/
 
