@@ -1,4 +1,4 @@
-//go:build !windowsAdd commentMore actions
+//go:build !windows
 
 package local
 
