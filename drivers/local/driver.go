@@ -128,11 +128,9 @@ func (d *Local) List(ctx context.Context, dir model.Obj, args model.ListArgs) ([
 	}
 	var files []model.Obj
 	for _, f := range rawFiles {
-		if !d.ShowHidden && strings.HasPrefix(f.Name(), ".") {
-			continue
+		if d.ShowHidden || !isHidden(f, fullPath) {
+			files = append(files, d.FileInfoToObj(ctx, f, args.ReqPath, fullPath))
 		}
-		file := d.FileInfoToObj(ctx, f, args.ReqPath, fullPath)
-		files = append(files, file)
 	}
 	return files, nil
 }
