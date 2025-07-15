@@ -7,6 +7,7 @@ import (
 	"github.com/AlliotTech/openalist/internal/driver"
 	"github.com/AlliotTech/openalist/internal/errs"
 	"github.com/AlliotTech/openalist/internal/model"
+	"github.com/AlliotTech/openalist/pkg/utils"
 	"github.com/go-resty/resty/v2"
 	"net/http"
 )
@@ -104,7 +105,7 @@ func (d *DoubaoShare) Link(ctx context.Context, file model.Obj, args model.LinkA
 		}
 
 		// 生成标准的Content-Disposition
-		contentDisposition := generateContentDisposition(u.Name)
+		contentDisposition := utils.GenerateContentDisposition(u.Name)
 
 		return &model.Link{
 			URL: downloadUrl,
