@@ -29,7 +29,7 @@ require (
 	github.com/dlclark/regexp2 v1.12.0
 	github.com/dustinxie/ecc v0.0.0-20210511000915-959544187564
 	github.com/foxxorcat/mopan-sdk-go v1.0.0
-	github.com/foxxorcat/weiyun-sdk-go v0.1.3
+	github.com/foxxorcat/weiyun-sdk-go v1.1.0
 	github.com/gin-contrib/cors v1.7.7
 	github.com/gin-gonic/gin v1.12.0
 	github.com/go-ldap/ldap/v3 v3.4.14
@@ -146,7 +146,7 @@ require (
 	github.com/xhofe/115-sdk-go v0.1.5
 	github.com/yuin/goldmark v1.8.4
 	go4.org v0.0.0-20260112195520-a5071408f32f
-	resty.dev/v3 v3.0.0-beta.3 // indirect
+	resty.dev/v3 v3.0.0-beta.3
 )
 
 require (

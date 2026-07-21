@@ -20,6 +20,7 @@ import (
 	"github.com/AlliotTech/openalist/pkg/utils"
 	"github.com/avast/retry-go"
 	weiyunsdkgo "github.com/foxxorcat/weiyun-sdk-go"
+	"resty.dev/v3"
 )
 
 type WeiYun struct {
@@ -48,7 +49,11 @@ func (d *WeiYun) Init(ctx context.Context) error {
 		d.uploadThread, d.UploadThread = 4, "4"
 	}
 
-	d.client = weiyunsdkgo.NewWeiYunClientWithRestyClient(base.NewRestyClient())
+	restyClient := resty.NewWithClient(base.HttpClient).
+		SetHeader("user-agent", base.UserAgent).
+		SetRetryCount(3).
+		SetTimeout(base.DefaultTimeout)
+	d.client = weiyunsdkgo.NewWeiYunClientWithRestyClient(restyClient)
 	err := d.client.SetCookiesStr(d.Cookies).RefreshCtoken()
 	if err != nil {
 		return err
@@ -67,7 +72,7 @@ func (d *WeiYun) Init(ctx context.Context) error {
 	})
 
 	// qqCookie保活
-	if d.client.LoginType() == 1 {
+	if d.client.LoginType() == weiyunsdkgo.AccountTypeQQ || d.client.LoginType() == weiyunsdkgo.AccountTypeQQOpenID {
 		d.cron = cron.NewCron(time.Minute * 5)
 		d.cron.Do(func() {
 			_ = d.client.KeepAlive()
