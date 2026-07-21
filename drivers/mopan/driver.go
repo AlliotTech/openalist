@@ -21,6 +21,7 @@ import (
 	"github.com/avast/retry-go"
 	"github.com/foxxorcat/mopan-sdk-go"
 	log "github.com/sirupsen/logrus"
+	"resty.dev/v3"
 )
 
 type MoPan struct {
@@ -77,8 +78,11 @@ func (d *MoPan) Init(ctx context.Context) error {
 		}
 		return nil
 	}
-	d.client = mopan.NewMoClientWithRestyClient(base.NewRestyClient()).
-		SetRestyClient(base.RestyClient).
+	restyClient := resty.NewWithClient(base.HttpClient).
+		SetHeader("user-agent", base.UserAgent).
+		SetRetryCount(3).
+		SetTimeout(base.DefaultTimeout)
+	d.client = mopan.NewMoClientWithRestyClient(restyClient).
 		SetOnAuthorizationExpired(func(_ error) error {
 			err := login()
 			if err != nil {
