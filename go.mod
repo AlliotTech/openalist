@@ -65,7 +65,7 @@ require (
 	github.com/xhofe/tache v0.1.6
 	github.com/xhofe/wopan-sdk-go v0.2.0
 	github.com/yeka/zip v0.0.0-20231116150916-03d6312748a9
-	github.com/zzzhr1990/go-common-entity v0.0.0-20221216044934-fd1c571e3a22
+	github.com/zzzhr1990/go-common-entity v0.0.0-20250202070650-1a200048f0d3
 	golang.org/x/crypto v0.54.0
 	golang.org/x/exp v0.0.0-20260410095643-746e56fc9e2f
 	golang.org/x/image v0.44.0
