@@ -6,11 +6,8 @@ on:
 
 jobs:
   release:
-    strategy:
-      matrix:
-        platform: [ ubuntu-latest ]
     name: Release
-    runs-on: ${{ matrix.platform }}
+    runs-on: ubuntu-latest
     steps:
 
       - name: Free Disk Space (Ubuntu)

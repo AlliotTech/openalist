@@ -12,16 +12,13 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   auto_lang:
-    strategy:
-      matrix:
-        platform: [ ubuntu-latest ]
     name: auto generate lang.json
-    runs-on: ${{ matrix.platform }}
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout alist
         uses: actions/checkout@v7.0.1

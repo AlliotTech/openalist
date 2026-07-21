@@ -1,24 +1,50 @@
-appName="alist"
-builtAt="$(date +'%F %T %z')"
-gitAuthor="Xhofe <i@nn.ci>"
-gitCommit=$(git log --pretty=format:"%h" -1)
+#!/usr/bin/env bash
 
-if [ "$1" = "dev" ]; then
+set -Eeuo pipefail
+
+appName="alist"
+mode="${1:-}"
+target="${2:-}"
+ldflags=""
+
+case "$mode" in
+dev)
   version="dev"
   webVersion="dev"
-elif [ "$1" = "beta" ]; then
+  ;;
+beta)
   version="beta"
   webVersion="dev"
-else
-  git tag -d beta
+  ;;
+release)
+  git tag -d beta >/dev/null 2>&1 || true
   version=$(git describe --abbrev=0 --tags)
-  webVersion=$(wget -qO- -t1 -T2 "https://api.github.com/repos/AlliotTech/openalist-web/releases/latest" | grep "tag_name" | head -n 1 | awk -F ":" '{print $2}' | sed 's/\"//g;s/,//g;s/ //g')
-fi
+  webReleaseUrl=$(curl --fail --silent --show-error --location --head --retry 3 \
+    --output /dev/null --write-out '%{url_effective}' \
+    "https://github.com/AlliotTech/openalist-web/releases/latest")
+  webVersion="${webReleaseUrl##*/}"
+  if [[ -z "$webVersion" ]]; then
+    echo "Failed to resolve the latest frontend version" >&2
+    exit 1
+  fi
+  ;;
+prepare | zip)
+  ;;
+*)
+  echo "Parameter error" >&2
+  exit 2
+  ;;
+esac
 
-echo "backend version: $version"
-echo "frontend version: $webVersion"
+if [[ "$mode" == "dev" || "$mode" == "beta" || "$mode" == "release" ]]; then
+  builtAt="$(date +'%F %T %z')"
+  gitAuthor="Xhofe <i@nn.ci>"
+  gitCommit=$(git log --pretty=format:"%h" -1)
 
-ldflags="\
+  echo "backend version: $version"
+  echo "frontend version: $webVersion"
+
+  ldflags="\
 -w -s \
 -X 'github.com/AlliotTech/openalist/internal/conf.BuiltAt=$builtAt' \
 -X 'github.com/AlliotTech/openalist/internal/conf.GitAuthor=$gitAuthor' \
@@ -26,9 +52,12 @@ ldflags="\
 -X 'github.com/AlliotTech/openalist/internal/conf.Version=$version' \
 -X 'github.com/AlliotTech/openalist/internal/conf.WebVersion=$webVersion' \
 "
+fi
 
 FetchWebDev() {
-  curl -L https://codeload.github.com/AlliotTech/web-dist/tar.gz/refs/heads/dev -o web-dist-dev.tar.gz
+  curl --fail --location --retry 3 \
+    https://codeload.github.com/AlliotTech/web-dist/tar.gz/refs/heads/dev \
+    --output web-dist-dev.tar.gz
   tar -zxvf web-dist-dev.tar.gz
   rm -rf public/dist
   mv -f web-dist-dev/dist public
@@ -36,7 +65,9 @@ FetchWebDev() {
 }
 
 FetchWebRelease() {
-  curl -L https://github.com/AlliotTech/openalist-web/releases/latest/download/dist.tar.gz -o dist.tar.gz
+  curl --fail --location --retry 3 \
+    https://github.com/AlliotTech/openalist-web/releases/latest/download/dist.tar.gz \
+    --output dist.tar.gz
   tar -zxvf dist.tar.gz
   rm -rf public/dist
   mv -f dist public
@@ -49,8 +80,8 @@ BuildWinArm64() {
   chmod +x ./wrapper/zcxx-arm64
   export GOOS=windows
   export GOARCH=arm64
-  export CC=$(pwd)/wrapper/zcc-arm64
-  export CXX=$(pwd)/wrapper/zcxx-arm64
+  export CC="$PWD/wrapper/zcc-arm64"
+  export CXX="$PWD/wrapper/zcxx-arm64"
   export CGO_ENABLED=1
   go build -o "$1" -ldflags="$ldflags" -tags=jsoniter .
 }
@@ -63,7 +94,7 @@ BuildDev() {
   FILES=(x86_64-linux-musl-cross aarch64-linux-musl-cross)
   for i in "${FILES[@]}"; do
     url="${BASE}${i}.tgz"
-    curl -L -o "${i}.tgz" "${url}"
+    curl --fail --location --retry 3 --output "${i}.tgz" "${url}"
     sudo tar xf "${i}.tgz" --strip-components 1 -C /usr/local
   done
   OS_ARCHES=(linux-musl-amd64 linux-musl-arm64)
@@ -71,12 +102,12 @@ BuildDev() {
   for i in "${!OS_ARCHES[@]}"; do
     os_arch=${OS_ARCHES[$i]}
     cgo_cc=${CGO_ARGS[$i]}
-    echo building for ${os_arch}
+    echo "building for ${os_arch}"
     export GOOS=${os_arch%%-*}
     export GOARCH=${os_arch##*-}
     export CC=${cgo_cc}
     export CGO_ENABLED=1
-    go build -o ./dist/$appName-$os_arch -ldflags="$muslflags" -tags=jsoniter .
+    go build -o "./dist/${appName}-${os_arch}" -ldflags="$muslflags" -tags=jsoniter .
   done
   xgo -targets=windows/amd64,darwin/amd64,darwin/arm64 -out "$appName" -ldflags="$ldflags" -tags=jsoniter .
   mv alist-* dist
@@ -100,7 +131,7 @@ PrepareBuildDockerMusl() {
   for i in "${FILES[@]}"; do
     url="${BASE}${i}.tgz"
     lib_tgz="build/${i}.tgz"
-    curl -L -o "${lib_tgz}" "${url}"
+    curl --fail --location --retry 3 --output "${lib_tgz}" "${url}"
     tar xf "${lib_tgz}" --strip-components 1 -C build/musl-libs
     rm -f "${lib_tgz}"
   done
@@ -126,7 +157,7 @@ BuildDockerMultiplatform() {
     export GOARCH=$arch
     export CC=${cgo_cc}
     echo "building for $os_arch"
-    go build -o build/$os/$arch/alist -ldflags="$docker_lflags" -tags=jsoniter .
+    go build -o "build/$os/$arch/alist" -ldflags="$docker_lflags" -tags=jsoniter .
   done
 
   # DOCKER_ARM_ARCHES=(linux-arm/v6 linux-arm/v7)
@@ -164,7 +195,7 @@ BuildReleaseLinuxMusl() {
   FILES=(x86_64-linux-musl-cross aarch64-linux-musl-cross mips-linux-musl-cross mips64-linux-musl-cross mips64el-linux-musl-cross mipsel-linux-musl-cross powerpc64le-linux-musl-cross s390x-linux-musl-cross)
   for i in "${FILES[@]}"; do
     url="${BASE}${i}.tgz"
-    curl -L -o "${i}.tgz" "${url}"
+    curl --fail --location --retry 3 --output "${i}.tgz" "${url}"
     sudo tar xf "${i}.tgz" --strip-components 1 -C /usr/local
     rm -f "${i}.tgz"
   done
@@ -173,12 +204,12 @@ BuildReleaseLinuxMusl() {
   for i in "${!OS_ARCHES[@]}"; do
     os_arch=${OS_ARCHES[$i]}
     cgo_cc=${CGO_ARGS[$i]}
-    echo building for ${os_arch}
+    echo "building for ${os_arch}"
     export GOOS=${os_arch%%-*}
     export GOARCH=${os_arch##*-}
     export CC=${cgo_cc}
     export CGO_ENABLED=1
-    go build -o ./build/$appName-$os_arch -ldflags="$muslflags" -tags=jsoniter .
+    go build -o "./build/${appName}-${os_arch}" -ldflags="$muslflags" -tags=jsoniter .
   done
 }
 
@@ -191,7 +222,7 @@ BuildReleaseLinuxMuslArm() {
   FILES=(arm-linux-musleabi-cross arm-linux-musleabihf-cross armel-linux-musleabi-cross armel-linux-musleabihf-cross armv5l-linux-musleabi-cross armv5l-linux-musleabihf-cross armv6-linux-musleabi-cross armv6-linux-musleabihf-cross armv7l-linux-musleabihf-cross armv7m-linux-musleabi-cross armv7r-linux-musleabihf-cross)
   for i in "${FILES[@]}"; do
     url="${BASE}${i}.tgz"
-    curl -L -o "${i}.tgz" "${url}"
+    curl --fail --location --retry 3 --output "${i}.tgz" "${url}"
     sudo tar xf "${i}.tgz" --strip-components 1 -C /usr/local
     rm -f "${i}.tgz"
   done
@@ -205,13 +236,13 @@ BuildReleaseLinuxMuslArm() {
     os_arch=${OS_ARCHES[$i]}
     cgo_cc=${CGO_ARGS[$i]}
     arm=${GOARMS[$i]}
-    echo building for ${os_arch}
+    echo "building for ${os_arch}"
     export GOOS=linux
     export GOARCH=arm
     export CC=${cgo_cc}
     export CGO_ENABLED=1
     export GOARM=${arm}
-    go build -o ./build/$appName-$os_arch -ldflags="$muslflags" -tags=jsoniter .
+    go build -o "./build/${appName}-${os_arch}" -ldflags="$muslflags" -tags=jsoniter .
   done
 }
 
@@ -225,14 +256,14 @@ BuildReleaseAndroid() {
   CGO_ARGS=(x86_64-linux-android24-clang aarch64-linux-android24-clang i686-linux-android24-clang armv7a-linux-androideabi24-clang)
   for i in "${!OS_ARCHES[@]}"; do
     os_arch=${OS_ARCHES[$i]}
-    cgo_cc=$(realpath android-ndk-r26b/toolchains/llvm/prebuilt/linux-x86_64/bin/${CGO_ARGS[$i]})
-    echo building for android-${os_arch}
+    cgo_cc=$(realpath "android-ndk-r26b/toolchains/llvm/prebuilt/linux-x86_64/bin/${CGO_ARGS[$i]}")
+    echo "building for android-${os_arch}"
     export GOOS=android
     export GOARCH=${os_arch##*-}
     export CC=${cgo_cc}
     export CGO_ENABLED=1
-    go build -o ./build/$appName-android-$os_arch -ldflags="$ldflags" -tags=jsoniter .
-    android-ndk-r26b/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip ./build/$appName-android-$os_arch
+    go build -o "./build/${appName}-android-${os_arch}" -ldflags="$ldflags" -tags=jsoniter .
+    android-ndk-r26b/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip "./build/${appName}-android-${os_arch}"
   done
 }
 
@@ -245,99 +276,94 @@ BuildReleaseFreeBSD() {
   for i in "${!OS_ARCHES[@]}"; do
     os_arch=${OS_ARCHES[$i]}
     cgo_cc="clang --target=${CGO_ARGS[$i]} --sysroot=/opt/freebsd/${os_arch}"
-    echo building for freebsd-${os_arch}
+    echo "building for freebsd-${os_arch}"
     sudo mkdir -p "/opt/freebsd/${os_arch}"
-    wget -q https://download.freebsd.org/releases/${os_arch}/14.1-RELEASE/base.txz
-    sudo tar -xf ./base.txz -C /opt/freebsd/${os_arch}
+    wget -q "https://download.freebsd.org/releases/${os_arch}/14.1-RELEASE/base.txz"
+    sudo tar -xf ./base.txz -C "/opt/freebsd/${os_arch}"
     rm base.txz
     export GOOS=freebsd
     export GOARCH=${GO_ARCHES[$i]}
     export CC=${cgo_cc}
     export CGO_ENABLED=1
     export CGO_LDFLAGS="-fuse-ld=lld"
-    go build -o ./build/$appName-freebsd-$os_arch -ldflags="$ldflags" -tags=jsoniter .
+    go build -o "./build/${appName}-freebsd-${os_arch}" -ldflags="$ldflags" -tags=jsoniter .
   done
 }
 
 MakeRelease() {
   cd build
-  mkdir compress
-  for i in $(find . -type f -name "$appName-linux-*"); do
-    cp "$i" alist
-    tar -czvf compress/"$i".tar.gz alist
-    rm -f alist
+  mkdir -p compress
+  local platform
+  local release_file
+  local archive_file
+  for platform in linux android darwin freebsd; do
+    while IFS= read -r -d '' release_file; do
+      cp "$release_file" alist
+      tar -czvf "compress/${release_file}.tar.gz" alist
+      rm -f alist
+    done < <(find . -type f -name "${appName}-${platform}-*" -print0)
   done
-    for i in $(find . -type f -name "$appName-android-*"); do
-    cp "$i" alist
-    tar -czvf compress/"$i".tar.gz alist
-    rm -f alist
-  done
-  for i in $(find . -type f -name "$appName-darwin-*"); do
-    cp "$i" alist
-    tar -czvf compress/"$i".tar.gz alist
-    rm -f alist
-  done
-  for i in $(find . -type f -name "$appName-freebsd-*"); do
-    cp "$i" alist
-    tar -czvf compress/"$i".tar.gz alist
-    rm -f alist
-  done
-  for i in $(find . -type f -name "$appName-windows-*"); do
-    cp "$i" alist.exe
-    zip compress/$(echo $i | sed 's/\.[^.]*$//').zip alist.exe
+  while IFS= read -r -d '' release_file; do
+    cp "$release_file" alist.exe
+    archive_file="${release_file%.*}"
+    zip "compress/${archive_file}.zip" alist.exe
     rm -f alist.exe
-  done
+  done < <(find . -type f -name "${appName}-windows-*" -print0)
   cd compress
   find . -type f -print0 | xargs -0 md5sum >"$1"
   cat "$1"
   cd ../..
 }
 
-if [ "$1" = "dev" ]; then
+if [[ "$mode" == "dev" ]]; then
   FetchWebDev
-  if [ "$2" = "docker" ]; then
+  if [[ "$target" == "docker" ]]; then
     BuildDocker
-  elif [ "$2" = "docker-multiplatform" ]; then
-      BuildDockerMultiplatform
-  elif [ "$2" = "web" ]; then
+  elif [[ "$target" == "docker-multiplatform" ]]; then
+    BuildDockerMultiplatform
+  elif [[ "$target" == "web" ]]; then
     echo "web only"
   else
     BuildDev
   fi
-elif [ "$1" = "release" -o "$1" = "beta" ]; then
-  if [ "$1" = "beta" ]; then
+elif [[ "$mode" == "release" || "$mode" == "beta" ]]; then
+  if [[ "$mode" == "beta" ]]; then
     FetchWebDev
   else
     FetchWebRelease
   fi
-  if [ "$2" = "docker" ]; then
+  if [[ "$target" == "docker" ]]; then
     BuildDocker
-  elif [ "$2" = "docker-multiplatform" ]; then
+  elif [[ "$target" == "docker-multiplatform" ]]; then
     BuildDockerMultiplatform
-  elif [ "$2" = "linux_musl_arm" ]; then
+  elif [[ "$target" == "linux_musl_arm" ]]; then
     BuildReleaseLinuxMuslArm
     MakeRelease "md5-linux-musl-arm.txt"
-  elif [ "$2" = "linux_musl" ]; then
+  elif [[ "$target" == "linux_musl" ]]; then
     BuildReleaseLinuxMusl
     MakeRelease "md5-linux-musl.txt"
-  elif [ "$2" = "android" ]; then
+  elif [[ "$target" == "android" ]]; then
     BuildReleaseAndroid
     MakeRelease "md5-android.txt"
-  elif [ "$2" = "freebsd" ]; then
+  elif [[ "$target" == "freebsd" ]]; then
     BuildReleaseFreeBSD
     MakeRelease "md5-freebsd.txt"
-  elif [ "$2" = "web" ]; then
+  elif [[ "$target" == "web" ]]; then
     echo "web only"
   else
     BuildRelease
     MakeRelease "md5.txt"
   fi
-elif [ "$1" = "prepare" ]; then
-  if [ "$2" = "docker-multiplatform" ]; then
+elif [[ "$mode" == "prepare" ]]; then
+  if [[ "$target" == "docker-multiplatform" ]]; then
     PrepareBuildDockerMusl
+  else
+    echo "Parameter error" >&2
+    exit 2
   fi
-elif [ "$1" = "zip" ]; then
-  MakeRelease "$2".txt
+elif [[ "$mode" == "zip" && -n "$target" ]]; then
+  MakeRelease "${target}.txt"
 else
-  echo -e "Parameter error"
+  echo "Parameter error" >&2
+  exit 2
 fi

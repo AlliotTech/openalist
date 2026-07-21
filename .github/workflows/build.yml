@@ -14,24 +14,21 @@ jobs:
   build:
     strategy:
       matrix:
-        platform: [ubuntu-latest]
-        target: 
-          - darwin-amd64
-          - darwin-arm64
-          - windows-amd64
-          - linux-arm64-musl
-          - linux-amd64-musl
-          - windows-arm64
-          - android-arm64
-    name: Build
-    runs-on: ${{ matrix.platform }}
+        include:
+          - group: xgo
+            targets: darwin-amd64,darwin-arm64,windows-amd64
+          - group: musl
+            targets: linux-arm64-musl,linux-amd64-musl
+          - group: windows-arm64
+            targets: windows-arm64
+          - group: android-arm64
+            targets: android-arm64
+    name: Build (${{ matrix.group }})
+    runs-on: ubuntu-latest
     steps:
 
       - name: Checkout
         uses: actions/checkout@v7.0.1
-
-      - uses: benjlevesque/short-sha@v4.0
-        id: short-sha
 
       - name: Setup Go
         uses: actions/setup-go@v7.0.0
@@ -44,7 +41,7 @@ jobs:
       - name: Build
         uses: go-cross/cgo-actions@v1.1.0
         with:
-          targets: ${{ matrix.target }}
+          targets: ${{ matrix.targets }}
           musl-target-format: $os-$musl-$arch
           out-dir: build
           x-flags: |
@@ -57,5 +54,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v7.0.1
         with:
-          name: alist_${{ env.SHA }}_${{ matrix.target }}
+          name: alist_${{ matrix.group }}
           path: build/*
+          if-no-files-found: error
+          retention-days: 3
