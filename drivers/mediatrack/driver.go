@@ -14,10 +14,6 @@ import (
 	"github.com/AlliotTech/openalist/internal/driver"
 	"github.com/AlliotTech/openalist/internal/model"
 	"github.com/AlliotTech/openalist/pkg/utils"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"github.com/go-resty/resty/v2"
 	"github.com/google/uuid"
 	log "github.com/sirupsen/logrus"
@@ -171,15 +167,6 @@ func (d *MediaTrack) Put(ctx context.Context, dstDir model.Obj, file model.FileS
 		return err
 	}
 	credential := resp.Data.Credentials
-	cfg := &aws.Config{
-		Credentials: credentials.NewStaticCredentials(credential.TmpSecretID, credential.TmpSecretKey, credential.Token),
-		Region:      &resp.Data.Region,
-		Endpoint:    aws.String("cos.accelerate.myqcloud.com"),
-	}
-	s, err := session.NewSession(cfg)
-	if err != nil {
-		return err
-	}
 	tempFile, err := file.CacheFullInTempFile()
 	if err != nil {
 		return err
@@ -187,13 +174,15 @@ func (d *MediaTrack) Put(ctx context.Context, dstDir model.Obj, file model.FileS
 	defer func() {
 		_ = tempFile.Close()
 	}()
-	uploader := s3manager.NewUploader(s)
-	if file.GetSize() > s3manager.MaxUploadParts*s3manager.DefaultUploadPartSize {
-		uploader.PartSize = file.GetSize() / (s3manager.MaxUploadParts - 1)
-	}
-	input := &s3manager.UploadInput{
-		Bucket: &resp.Data.Bucket,
-		Key:    &resp.Data.Object,
+	err = base.UploadToS3(ctx, base.S3UploadArgs{
+		Endpoint:        "cos.accelerate.myqcloud.com",
+		Region:          resp.Data.Region,
+		AccessKeyID:     credential.TmpSecretID,
+		SecretAccessKey: credential.TmpSecretKey,
+		SessionToken:    credential.Token,
+		Bucket:          resp.Data.Bucket,
+		Key:             resp.Data.Object,
+		Size:            file.GetSize(),
 		Body: driver.NewLimitedUploadStream(ctx, &driver.ReaderUpdatingProgress{
 			Reader: &driver.SimpleReaderWithSize{
 				Reader: tempFile,
@@ -201,8 +190,7 @@ func (d *MediaTrack) Put(ctx context.Context, dstDir model.Obj, file model.FileS
 			},
 			UpdateProgress: up,
 		}),
-	}
-	_, err = uploader.UploadWithContext(ctx, input)
+	})
 	if err != nil {
 		return err
 	}

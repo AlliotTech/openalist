@@ -17,10 +17,6 @@ import (
 	"github.com/AlliotTech/openalist/internal/model"
 	"github.com/AlliotTech/openalist/internal/stream"
 	"github.com/AlliotTech/openalist/pkg/utils"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"github.com/go-resty/resty/v2"
 	log "github.com/sirupsen/logrus"
 )
@@ -216,29 +212,21 @@ func (d *Pan123) Put(ctx context.Context, dstDir model.Obj, file model.FileStrea
 		err = d.newUpload(ctx, &resp, file, up)
 		return err
 	} else {
-		cfg := &aws.Config{
-			Credentials:      credentials.NewStaticCredentials(resp.Data.AccessKeyId, resp.Data.SecretAccessKey, resp.Data.SessionToken),
-			Region:           aws.String("123pan"),
-			Endpoint:         aws.String(resp.Data.EndPoint),
-			S3ForcePathStyle: aws.Bool(true),
-		}
-		s, err := session.NewSession(cfg)
-		if err != nil {
-			return err
-		}
-		uploader := s3manager.NewUploader(s)
-		if file.GetSize() > s3manager.MaxUploadParts*s3manager.DefaultUploadPartSize {
-			uploader.PartSize = file.GetSize() / (s3manager.MaxUploadParts - 1)
-		}
-		input := &s3manager.UploadInput{
-			Bucket: &resp.Data.Bucket,
-			Key:    &resp.Data.Key,
+		err = base.UploadToS3(ctx, base.S3UploadArgs{
+			Endpoint:        resp.Data.EndPoint,
+			Region:          "123pan",
+			AccessKeyID:     resp.Data.AccessKeyId,
+			SecretAccessKey: resp.Data.SecretAccessKey,
+			SessionToken:    resp.Data.SessionToken,
+			Bucket:          resp.Data.Bucket,
+			Key:             resp.Data.Key,
+			Size:            file.GetSize(),
+			UsePathStyle:    true,
 			Body: driver.NewLimitedUploadStream(ctx, &driver.ReaderUpdatingProgress{
 				Reader:         file,
 				UpdateProgress: up,
 			}),
-		}
-		_, err = uploader.UploadWithContext(ctx, input)
+		})
 		if err != nil {
 			return err
 		}

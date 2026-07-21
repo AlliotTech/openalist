@@ -15,10 +15,6 @@ import (
 	"github.com/AlliotTech/openalist/internal/model"
 	"github.com/AlliotTech/openalist/pkg/http_range"
 	"github.com/AlliotTech/openalist/pkg/utils"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"github.com/go-resty/resty/v2"
 )
 
@@ -258,28 +254,18 @@ func (d *Vtencent) FileUpload(ctx context.Context, dstDir model.Obj, stream mode
 	}
 	params := rspUGC.Data
 	certificate := params.TempCertificate
-	cfg := &aws.Config{
-		HTTPClient: base.HttpClient,
-		// S3ForcePathStyle: aws.Bool(true),
-		Credentials: credentials.NewStaticCredentials(certificate.SecretID, certificate.SecretKey, certificate.Token),
-		Region:      aws.String(params.StorageRegionV5),
-		Endpoint:    aws.String(fmt.Sprintf("cos.%s.myqcloud.com", params.StorageRegionV5)),
-	}
-	ss, err := session.NewSession(cfg)
-	if err != nil {
-		return err
-	}
-	uploader := s3manager.NewUploader(ss)
-	if stream.GetSize() > s3manager.MaxUploadParts*s3manager.DefaultUploadPartSize {
-		uploader.PartSize = stream.GetSize() / (s3manager.MaxUploadParts - 1)
-	}
-	input := &s3manager.UploadInput{
-		Bucket: aws.String(fmt.Sprintf("%s-%d", params.StorageBucket, params.StorageAppID)),
-		Key:    &params.Video.StoragePath,
+	err = base.UploadToS3(ctx, base.S3UploadArgs{
+		Endpoint:        fmt.Sprintf("cos.%s.myqcloud.com", params.StorageRegionV5),
+		Region:          params.StorageRegionV5,
+		AccessKeyID:     certificate.SecretID,
+		SecretAccessKey: certificate.SecretKey,
+		SessionToken:    certificate.Token,
+		Bucket:          fmt.Sprintf("%s-%d", params.StorageBucket, params.StorageAppID),
+		Key:             params.Video.StoragePath,
+		Size:            stream.GetSize(),
 		Body: driver.NewLimitedUploadStream(ctx,
 			io.TeeReader(stream, io.MultiWriter(hash, driver.NewProgress(stream.GetSize(), up)))),
-	}
-	_, err = uploader.UploadWithContext(ctx, input)
+	})
 	if err != nil {
 		return err
 	}

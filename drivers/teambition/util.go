@@ -14,10 +14,6 @@ import (
 	"github.com/AlliotTech/openalist/internal/driver"
 	"github.com/AlliotTech/openalist/internal/model"
 	"github.com/AlliotTech/openalist/pkg/utils"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"github.com/go-resty/resty/v2"
 	log "github.com/sirupsen/logrus"
 )
@@ -237,32 +233,23 @@ func (d *Teambition) newUpload(ctx context.Context, dstDir model.Obj, stream mod
 	if err != nil {
 		return err
 	}
-	cfg := &aws.Config{
-		Credentials: credentials.NewStaticCredentials(
-			uploadToken.Sdk.Credentials.AccessKeyId, uploadToken.Sdk.Credentials.SecretAccessKey, uploadToken.Sdk.Credentials.SessionToken),
-		Region:           &uploadToken.Sdk.Region,
-		Endpoint:         &uploadToken.Sdk.Endpoint,
-		S3ForcePathStyle: &uploadToken.Sdk.S3ForcePathStyle,
-	}
-	ss, err := session.NewSession(cfg)
-	if err != nil {
-		return err
-	}
-	uploader := s3manager.NewUploader(ss)
-	if stream.GetSize() > s3manager.MaxUploadParts*s3manager.DefaultUploadPartSize {
-		uploader.PartSize = stream.GetSize() / (s3manager.MaxUploadParts - 1)
-	}
-	input := &s3manager.UploadInput{
-		Bucket:             &uploadToken.Upload.Bucket,
-		Key:                &uploadToken.Upload.Key,
-		ContentDisposition: &uploadToken.Upload.ContentDisposition,
-		ContentType:        &uploadToken.Upload.ContentType,
+	err = base.UploadToS3(ctx, base.S3UploadArgs{
+		Endpoint:           uploadToken.Sdk.Endpoint,
+		Region:             uploadToken.Sdk.Region,
+		AccessKeyID:        uploadToken.Sdk.Credentials.AccessKeyId,
+		SecretAccessKey:    uploadToken.Sdk.Credentials.SecretAccessKey,
+		SessionToken:       uploadToken.Sdk.Credentials.SessionToken,
+		Bucket:             uploadToken.Upload.Bucket,
+		Key:                uploadToken.Upload.Key,
+		ContentDisposition: uploadToken.Upload.ContentDisposition,
+		ContentType:        uploadToken.Upload.ContentType,
+		Size:               stream.GetSize(),
+		UsePathStyle:       uploadToken.Sdk.S3ForcePathStyle,
 		Body: driver.NewLimitedUploadStream(ctx, &driver.ReaderUpdatingProgress{
 			Reader:         stream,
 			UpdateProgress: up,
 		}),
-	}
-	_, err = uploader.UploadWithContext(ctx, input)
+	})
 	if err != nil {
 		return err
 	}

@@ -15,10 +15,6 @@ import (
 	"github.com/AlliotTech/openalist/internal/model"
 	"github.com/AlliotTech/openalist/internal/op"
 	"github.com/AlliotTech/openalist/pkg/http_range"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"github.com/city404/v6-public-rpc-proto/go/v6/common"
 	pbPublicUser "github.com/city404/v6-public-rpc-proto/go/v6/user"
 	pubUserFile "github.com/city404/v6-public-rpc-proto/go/v6/userfile"
@@ -376,27 +372,19 @@ func (d *HalalCloud) put(ctx context.Context, dstDir model.Obj, fileStream model
 	u, _ := url.Parse(result.Endpoint)
 	u.Host = "s3." + u.Host
 	result.Endpoint = u.String()
-	s, err := session.NewSession(&aws.Config{
-		HTTPClient:       base.HttpClient,
-		Credentials:      credentials.NewStaticCredentials(result.AccessKey, result.SecretKey, result.Token),
-		Region:           aws.String(result.Region),
-		Endpoint:         aws.String(result.Endpoint),
-		S3ForcePathStyle: aws.Bool(true),
-	})
-	if err != nil {
-		return nil, err
-	}
-	uploader := s3manager.NewUploader(s, func(u *s3manager.Uploader) {
-		u.Concurrency = d.uploadThread
-	})
-	if fileStream.GetSize() > s3manager.MaxUploadParts*s3manager.DefaultUploadPartSize {
-		uploader.PartSize = fileStream.GetSize() / (s3manager.MaxUploadParts - 1)
-	}
 	reader := driver.NewLimitedUploadStream(ctx, fileStream)
-	_, err = uploader.UploadWithContext(ctx, &s3manager.UploadInput{
-		Bucket: aws.String(result.Bucket),
-		Key:    aws.String(result.Key),
-		Body:   io.TeeReader(reader, driver.NewProgress(fileStream.GetSize(), up)),
+	err = base.UploadToS3(ctx, base.S3UploadArgs{
+		Endpoint:        result.Endpoint,
+		Region:          result.Region,
+		AccessKeyID:     result.AccessKey,
+		SecretAccessKey: result.SecretKey,
+		SessionToken:    result.Token,
+		Bucket:          result.Bucket,
+		Key:             result.Key,
+		Body:            io.TeeReader(reader, driver.NewProgress(fileStream.GetSize(), up)),
+		Size:            fileStream.GetSize(),
+		UsePathStyle:    true,
+		Concurrency:     d.uploadThread,
 	})
 	return nil, err
 

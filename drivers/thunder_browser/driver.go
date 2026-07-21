@@ -15,10 +15,6 @@ import (
 	streamPkg "github.com/AlliotTech/openalist/internal/stream"
 	"github.com/AlliotTech/openalist/pkg/utils"
 	hash_extend "github.com/AlliotTech/openalist/pkg/utils/hash"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"github.com/go-resty/resty/v2"
 )
 
@@ -489,23 +485,17 @@ func (xc *XunLeiBrowserCommon) Put(ctx context.Context, dstDir model.Obj, stream
 	param := resp.Resumable.Params
 	if resp.UploadType == UPLOAD_TYPE_RESUMABLE {
 		param.Endpoint = strings.TrimLeft(param.Endpoint, param.Bucket+".")
-		s, err := session.NewSession(&aws.Config{
-			Credentials: credentials.NewStaticCredentials(param.AccessKeyID, param.AccessKeySecret, param.SecurityToken),
-			Region:      aws.String("xunlei"),
-			Endpoint:    aws.String(param.Endpoint),
-		})
-		if err != nil {
-			return err
-		}
-		uploader := s3manager.NewUploader(s)
-		if stream.GetSize() > s3manager.MaxUploadParts*s3manager.DefaultUploadPartSize {
-			uploader.PartSize = stream.GetSize() / (s3manager.MaxUploadParts - 1)
-		}
-		_, err = uploader.UploadWithContext(ctx, &s3manager.UploadInput{
-			Bucket:  aws.String(param.Bucket),
-			Key:     aws.String(param.Key),
-			Expires: aws.Time(param.Expiration),
-			Body:    driver.NewLimitedUploadStream(ctx, io.TeeReader(stream, driver.NewProgress(stream.GetSize(), up))),
+		err = base.UploadToS3(ctx, base.S3UploadArgs{
+			Endpoint:        param.Endpoint,
+			Region:          "xunlei",
+			AccessKeyID:     param.AccessKeyID,
+			SecretAccessKey: param.AccessKeySecret,
+			SessionToken:    param.SecurityToken,
+			Bucket:          param.Bucket,
+			Key:             param.Key,
+			Expires:         &param.Expiration,
+			Size:            stream.GetSize(),
+			Body:            driver.NewLimitedUploadStream(ctx, io.TeeReader(stream, driver.NewProgress(stream.GetSize(), up))),
 		})
 		return err
 	}
