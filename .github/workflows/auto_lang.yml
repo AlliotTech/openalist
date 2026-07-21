@@ -20,22 +20,21 @@ jobs:
     strategy:
       matrix:
         platform: [ ubuntu-latest ]
-        go-version: [ '1.21' ]
     name: auto generate lang.json
     runs-on: ${{ matrix.platform }}
     steps:
-      - name: Setup go
-        uses: actions/setup-go@v5
-        with:
-          go-version: ${{ matrix.go-version }}
-
       - name: Checkout alist
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7.0.1
         with:
           path: alist
 
+      - name: Setup go
+        uses: actions/setup-go@v7.0.0
+        with:
+          go-version-file: alist/go.mod
+
       - name: Checkout alist-web
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7.0.1
         with:
           repository: 'alist-org/alist-web'
           ref: main
@@ -63,7 +62,7 @@ jobs:
           cd ..
 
       - name: Push lang files
-        uses: ad-m/github-push-action@master
+        uses: ad-m/github-push-action@v1.3.0
         with:
           github_token: ${{ secrets.MY_TOKEN }}
           branch: main
