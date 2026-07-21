@@ -28,21 +28,21 @@ jobs:
     steps:
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7.0.1
 
-      - uses: benjlevesque/short-sha@v3.0
+      - uses: benjlevesque/short-sha@v4.0
         id: short-sha
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7.0.0
         with:
-          go-version: '1.22'
+          go-version-file: go.mod
 
       - name: Setup web
         run: bash build.sh dev web
 
       - name: Build
-        uses: go-cross/cgo-actions@v1
+        uses: go-cross/cgo-actions@v1.1.0
         with:
           targets: ${{ matrix.target }}
           musl-target-format: $os-$musl-$arch
@@ -55,7 +55,7 @@ jobs:
             github.com/AlliotTech/openalist/internal/conf.WebVersion=dev
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: alist_${{ env.SHA }}_${{ matrix.target }}
           path: build/*
