@@ -2,6 +2,7 @@ package handles
 
 import (
 	"fmt"
+	"html"
 	"net/url"
 	"strings"
 
@@ -43,12 +44,10 @@ func Plist(c *gin.Context) {
 		common.ErrorResp(c, err, 400)
 		return
 	}
-	fullName := c.Param("name")
 	Url := link.String()
-	Url = strings.ReplaceAll(Url, "<", "[")
-	Url = strings.ReplaceAll(Url, ">", "]")
+	Url = strings.ReplaceAll(Url, "]]>", "]]]]><![CDATA[>")
 	nameEncode := linkNameSplit[1]
-	fullName, err = url.PathUnescape(nameEncode)
+	fullName, err := url.PathUnescape(nameEncode)
 	if err != nil {
 		common.ErrorResp(c, err, 400)
 		return
@@ -62,8 +61,8 @@ func Plist(c *gin.Context) {
 		identifier = ss[len(ss)-1]
 	}
 
-	name = strings.ReplaceAll(name, "<", "[")
-	name = strings.ReplaceAll(name, ">", "]")
+	name = html.EscapeString(name)
+	identifier = html.EscapeString(identifier)
 	plist := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
     <dict>

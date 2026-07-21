@@ -8,7 +8,6 @@ import (
 	"github.com/kdomanski/iso9660"
 	"io"
 	"os"
-	stdpath "path"
 )
 
 type ISO9660 struct {
@@ -78,7 +77,10 @@ func (ISO9660) Decompress(ss []*stream.SeekableStream, outputPath string, args m
 	}
 	if obj.IsDir() {
 		if args.InnerPath != "/" {
-			outputPath = stdpath.Join(outputPath, obj.Name())
+			outputPath, err = tool.SafeExtractPath(outputPath, obj.Name())
+			if err != nil {
+				return err
+			}
 			if err = os.MkdirAll(outputPath, 0700); err != nil {
 				return err
 			}

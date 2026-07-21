@@ -4,9 +4,9 @@ import (
 	"io"
 	fs2 "io/fs"
 	"os"
-	stdpath "path"
 	"strings"
 
+	"github.com/AlliotTech/openalist/internal/archive/tool"
 	"github.com/AlliotTech/openalist/internal/errs"
 	"github.com/AlliotTech/openalist/internal/model"
 	"github.com/AlliotTech/openalist/internal/stream"
@@ -69,7 +69,11 @@ func decompress(fsys fs2.FS, filePath, targetPath string, up model.UpdateProgres
 	if err != nil {
 		return err
 	}
-	f, err := os.OpenFile(stdpath.Join(targetPath, stat.Name()), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+	destPath, err := tool.SafeExtractPath(targetPath, stat.Name())
+	if err != nil {
+		return err
+	}
+	f, err := os.OpenFile(destPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
 	if err != nil {
 		return err
 	}

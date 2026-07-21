@@ -5,13 +5,13 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
-	"net/http"
 	"net/url"
 	"strconv"
 
 	"github.com/AlliotTech/openalist/internal/conf"
 	"github.com/AlliotTech/openalist/internal/errs"
 	"github.com/AlliotTech/openalist/internal/model"
+	internalnet "github.com/AlliotTech/openalist/internal/net"
 	"github.com/AlliotTech/openalist/internal/offline_download/tool"
 	"github.com/AlliotTech/openalist/internal/setting"
 	"github.com/AlliotTech/openalist/pkg/utils"
@@ -84,11 +84,14 @@ func (t *Transmission) AddURL(args *tool.AddUrlArgs) (string, error) {
 	}
 	// http url for .torrent file
 	if endpoint.Scheme == "http" || endpoint.Scheme == "https" {
-		resp, err := http.Get(args.Url)
+		resp, err := internalnet.HttpClient().Get(args.Url)
 		if err != nil {
 			return "", errors.Wrap(err, "failed to get .torrent file")
 		}
 		defer resp.Body.Close()
+		if resp.StatusCode >= 400 {
+			return "", errors.Errorf("failed to get .torrent file: http status code %d", resp.StatusCode)
+		}
 		buffer := new(bytes.Buffer)
 		encoder := base64.NewEncoder(base64.StdEncoding, buffer)
 		// Stream file to the encoder

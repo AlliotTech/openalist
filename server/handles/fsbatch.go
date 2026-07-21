@@ -148,6 +148,19 @@ func FsBatchRename(c *gin.Context) {
 		common.ErrorResp(c, err, 400)
 		return
 	}
+	for _, renameObject := range req.RenameObjects {
+		if renameObject.SrcName == "" || renameObject.NewName == "" {
+			continue
+		}
+		if err := checkRelativePath(renameObject.SrcName); err != nil {
+			common.ErrorResp(c, err, 403)
+			return
+		}
+		if err := checkRelativePath(renameObject.NewName); err != nil {
+			common.ErrorResp(c, err, 403)
+			return
+		}
+	}
 	user := c.MustGet("user").(*model.User)
 	if !user.CanRename() {
 		common.ErrorResp(c, errs.PermissionDenied, 403)
@@ -231,6 +244,10 @@ func FsRegexRename(c *gin.Context) {
 		if srcRegexp.MatchString(file.GetName()) {
 			filePath := fmt.Sprintf("%s/%s", reqPath, file.GetName())
 			newFileName := srcRegexp.ReplaceAllString(file.GetName(), req.NewNameRegex)
+			if err := checkRelativePath(newFileName); err != nil {
+				common.ErrorResp(c, err, 403)
+				return
+			}
 			if err := fs.Rename(c, filePath, newFileName); err != nil {
 				common.ErrorResp(c, err, 500)
 				return

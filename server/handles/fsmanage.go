@@ -2,15 +2,16 @@ package handles
 
 import (
 	"fmt"
-	"github.com/AlliotTech/openalist/internal/task"
 	"io"
 	stdpath "path"
+	"strings"
 
 	"github.com/AlliotTech/openalist/internal/errs"
 	"github.com/AlliotTech/openalist/internal/fs"
 	"github.com/AlliotTech/openalist/internal/model"
 	"github.com/AlliotTech/openalist/internal/op"
 	"github.com/AlliotTech/openalist/internal/sign"
+	"github.com/AlliotTech/openalist/internal/task"
 	"github.com/AlliotTech/openalist/pkg/generic"
 	"github.com/AlliotTech/openalist/pkg/utils"
 	"github.com/AlliotTech/openalist/server/common"
@@ -72,6 +73,10 @@ func FsMove(c *gin.Context) {
 		common.ErrorStrResp(c, "Empty file names", 400)
 		return
 	}
+	if err := checkRelativePaths(req.Names); err != nil {
+		common.ErrorResp(c, err, 403)
+		return
+	}
 	user := c.MustGet("user").(*model.User)
 	if !user.CanMove() {
 		common.ErrorResp(c, errs.PermissionDenied, 403)
@@ -113,6 +118,10 @@ func FsCopy(c *gin.Context) {
 	}
 	if len(req.Names) == 0 {
 		common.ErrorStrResp(c, "Empty file names", 400)
+		return
+	}
+	if err := checkRelativePaths(req.Names); err != nil {
+		common.ErrorResp(c, err, 403)
 		return
 	}
 	user := c.MustGet("user").(*model.User)
@@ -166,6 +175,10 @@ func FsRename(c *gin.Context) {
 		common.ErrorResp(c, err, 400)
 		return
 	}
+	if err := checkRelativePath(req.Name); err != nil {
+		common.ErrorResp(c, err, 403)
+		return
+	}
 	user := c.MustGet("user").(*model.User)
 	if !user.CanRename() {
 		common.ErrorResp(c, errs.PermissionDenied, 403)
@@ -207,6 +220,10 @@ func FsRemove(c *gin.Context) {
 		common.ErrorStrResp(c, "Empty file names", 400)
 		return
 	}
+	if err := checkRelativePaths(req.Names); err != nil {
+		common.ErrorResp(c, err, 403)
+		return
+	}
 	user := c.MustGet("user").(*model.User)
 	if !user.CanRemove() {
 		common.ErrorResp(c, errs.PermissionDenied, 403)
@@ -226,6 +243,22 @@ func FsRemove(c *gin.Context) {
 	}
 	//fs.ClearCache(req.Dir)
 	common.SuccessResp(c)
+}
+
+func checkRelativePaths(paths []string) error {
+	for _, path := range paths {
+		if err := checkRelativePath(path); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func checkRelativePath(path string) error {
+	if path == "" || path == "." || path == ".." || strings.ContainsAny(path, `/\`) {
+		return errs.RelativePath
+	}
+	return nil
 }
 
 type RemoveEmptyDirectoryReq struct {

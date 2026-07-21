@@ -8,6 +8,7 @@ import (
 	"io"
 	"mime"
 	"mime/multipart"
+	gonet "net"
 	"net/http"
 	"path/filepath"
 	"strconv"
@@ -279,11 +280,41 @@ func HttpClient() *http.Client {
 }
 
 func NewHttpClient() *http.Client {
-	return &http.Client{
-		Timeout: time.Hour * 48,
-		Transport: &http.Transport{
-			Proxy:           http.ProxyFromEnvironment,
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: conf.Conf.TlsInsecureSkipVerify},
-		},
+	transport := &http.Transport{
+		Proxy:           http.ProxyFromEnvironment,
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: conf.Conf.TlsInsecureSkipVerify},
 	}
+	return &http.Client{
+		Timeout:   time.Hour * 48,
+		Transport: &safeTransport{base: transport},
+	}
+}
+
+type safeTransport struct {
+	base http.RoundTripper
+}
+
+func (t *safeTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	host := req.URL.Hostname()
+	addresses, err := gonet.DefaultResolver.LookupIPAddr(req.Context(), host)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to resolve host: %s", host)
+	}
+	if len(addresses) == 0 {
+		return nil, fmt.Errorf("failed to resolve host %s: no addresses found", host)
+	}
+	for _, address := range addresses {
+		if isCloudMetadataIP(address.IP) {
+			return nil, ErrCloudMetadataEndpoint
+		}
+	}
+	return t.base.RoundTrip(req)
+}
+
+var ErrCloudMetadataEndpoint = errors.New("access to cloud metadata endpoint is not allowed")
+
+func isCloudMetadataIP(ip gonet.IP) bool {
+	return ip.Equal(gonet.ParseIP("169.254.169.254")) ||
+		ip.Equal(gonet.ParseIP("100.100.100.200")) ||
+		ip.Equal(gonet.ParseIP("fd00:ec2::254"))
 }

@@ -4,7 +4,7 @@ import (
 	"io"
 	"io/fs"
 	"os"
-	stdpath "path"
+	"path/filepath"
 	"strings"
 
 	"github.com/AlliotTech/openalist/internal/archive/tool"
@@ -106,7 +106,10 @@ func (Archives) Decompress(ss []*stream.SeekableStream, outputPath string, args 
 		}
 		if stat.IsDir() {
 			isDir = true
-			outputPath = stdpath.Join(outputPath, stat.Name())
+			outputPath, err = tool.SafeExtractPath(outputPath, stat.Name())
+			if err != nil {
+				return err
+			}
 			err = os.Mkdir(outputPath, 0700)
 			if err != nil {
 				return filterPassword(err)
@@ -119,11 +122,14 @@ func (Archives) Decompress(ss []*stream.SeekableStream, outputPath string, args 
 				return err
 			}
 			relPath := strings.TrimPrefix(p, path+"/")
-			dstPath := stdpath.Join(outputPath, relPath)
+			dstPath, err := tool.SafeExtractPath(outputPath, relPath)
+			if err != nil {
+				return err
+			}
 			if d.IsDir() {
 				err = os.MkdirAll(dstPath, 0700)
 			} else {
-				dir := stdpath.Dir(dstPath)
+				dir := filepath.Dir(dstPath)
 				err = decompress(fsys, p, dir, func(_ float64) {})
 			}
 			return err

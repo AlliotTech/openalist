@@ -100,7 +100,7 @@ func initStorage(ctx context.Context, storage model.Storage, storageDriver drive
 		if err := recover(); err != nil {
 			errInfo := fmt.Sprintf("[panic] err: %v\nstack: %s\n", err, getCurrentGoroutineStack())
 			log.Errorf("panic init storage: %s", errInfo)
-			driverStorage.SetStatus(errInfo)
+			driverStorage.SetStatus(utils.SanitizeHTML(errInfo))
 			MustSaveDriverStorage(storageDriver)
 			storagesMap.Store(driverStorage.MountPath, storageDriver)
 		}
@@ -135,7 +135,7 @@ func initStorage(ctx context.Context, storage model.Storage, storageDriver drive
 	}
 	storagesMap.Store(driverStorage.MountPath, storageDriver)
 	if err != nil {
-		driverStorage.SetStatus(err.Error())
+		driverStorage.SetStatus(utils.SanitizeHTML(err.Error()))
 		err = errors.Wrap(err, "failed init storage")
 	} else {
 		driverStorage.SetStatus(WORK)

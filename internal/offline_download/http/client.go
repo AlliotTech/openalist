@@ -5,17 +5,17 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"path"
 	"path/filepath"
 	"strings"
 
 	"github.com/AlliotTech/openalist/internal/model"
+	internalnet "github.com/AlliotTech/openalist/internal/net"
 	"github.com/AlliotTech/openalist/internal/offline_download/tool"
 	"github.com/AlliotTech/openalist/pkg/utils"
 )
 
 type SimpleHttp struct {
-	client http.Client
+	client *http.Client
 }
 
 func (s SimpleHttp) Name() string {
@@ -57,7 +57,11 @@ func (s SimpleHttp) Run(task *tool.DownloadTask) error {
 	if err != nil {
 		return err
 	}
-	resp, err := s.client.Do(req)
+	client := s.client
+	if client == nil {
+		client = internalnet.HttpClient()
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		return err
 	}
@@ -70,13 +74,26 @@ func (s SimpleHttp) Run(task *tool.DownloadTask) error {
 	if urlPath == "" {
 		urlPath = strings.ReplaceAll(_u.Host, ".", "_")
 	}
-	filename := path.Base(urlPath)
-	if n, err := parseFilenameFromContentDisposition(resp.Header.Get("Content-Disposition")); err == nil {
-		filename = n
+	filename, err := parseFilenameFromContentDisposition(resp.Header.Get("Content-Disposition"))
+	if err != nil {
+		filename, err = sanitizeFilename(urlPath)
+	}
+	if err != nil {
+		filename = strings.ReplaceAll(_u.Host, ":", "_")
+		filename, err = sanitizeFilename(filename)
+		if err != nil {
+			return err
+		}
 	}
 	// save to temp dir
-	_ = os.MkdirAll(task.TempDir, os.ModePerm)
+	if err := os.MkdirAll(task.TempDir, os.ModePerm); err != nil {
+		return err
+	}
 	filePath := filepath.Join(task.TempDir, filename)
+	cleanTempDir := filepath.Clean(task.TempDir) + string(filepath.Separator)
+	if !strings.HasPrefix(filepath.Clean(filePath)+string(filepath.Separator), cleanTempDir) {
+		return fmt.Errorf("filename illegal")
+	}
 	file, err := os.Create(filePath)
 	if err != nil {
 		return err

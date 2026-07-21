@@ -155,7 +155,7 @@ func DefaultConfig() *Config {
 		},
 		MaxConnections:        0,
 		MaxConcurrency:        64,
-		TlsInsecureSkipVerify: true,
+		TlsInsecureSkipVerify: false,
 		Tasks: TasksConfig{
 			Download: TaskConfig{
 				Workers:  5,

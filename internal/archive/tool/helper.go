@@ -1,10 +1,12 @@
 package tool
 
 import (
+	"fmt"
 	"io"
 	"io/fs"
 	"os"
 	stdpath "path"
+	"path/filepath"
 	"strings"
 
 	"github.com/AlliotTech/openalist/internal/model"
@@ -161,8 +163,12 @@ func decompress(file SubFile, filePath, outputPath, password string) error {
 	targetPath := outputPath
 	dir, base := stdpath.Split(filePath)
 	if dir != "" {
-		targetPath = stdpath.Join(targetPath, dir)
-		err := os.MkdirAll(targetPath, 0700)
+		var err error
+		targetPath, err = SafeExtractPath(targetPath, dir)
+		if err != nil {
+			return err
+		}
+		err = os.MkdirAll(targetPath, 0700)
 		if err != nil {
 			return err
 		}
@@ -185,7 +191,11 @@ func _decompress(file SubFile, targetPath, password string, up model.UpdateProgr
 		return err
 	}
 	defer func() { _ = rc.Close() }()
-	f, err := os.OpenFile(stdpath.Join(targetPath, file.FileInfo().Name()), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+	destPath, err := SafeExtractPath(targetPath, file.FileInfo().Name())
+	if err != nil {
+		return err
+	}
+	f, err := os.OpenFile(destPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
 	if err != nil {
 		return err
 	}
@@ -201,4 +211,20 @@ func _decompress(file SubFile, targetPath, password string, up model.UpdateProgr
 		return err
 	}
 	return nil
+}
+
+func SafeExtractPath(outputPath, archivePath string) (string, error) {
+	separator := string(os.PathSeparator)
+	normalized := strings.ReplaceAll(archivePath, "\\", separator)
+	normalized = strings.ReplaceAll(normalized, "/", separator)
+	if filepath.IsAbs(normalized) || filepath.VolumeName(normalized) != "" {
+		return "", fmt.Errorf("illegal archive path: %s", archivePath)
+	}
+
+	targetPath := filepath.Join(outputPath, normalized)
+	relativePath, err := filepath.Rel(outputPath, targetPath)
+	if err != nil || relativePath == ".." || strings.HasPrefix(relativePath, ".."+separator) || filepath.IsAbs(relativePath) {
+		return "", fmt.Errorf("illegal archive path: %s", archivePath)
+	}
+	return targetPath, nil
 }

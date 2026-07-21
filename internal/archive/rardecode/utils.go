@@ -183,8 +183,12 @@ func decompress(reader *rardecode.Reader, header *rardecode.FileHeader, filePath
 	targetPath := outputPath
 	dir, base := stdpath.Split(filePath)
 	if dir != "" {
-		targetPath = stdpath.Join(targetPath, dir)
-		err := os.MkdirAll(targetPath, 0700)
+		var err error
+		targetPath, err = tool.SafeExtractPath(targetPath, dir)
+		if err != nil {
+			return err
+		}
+		err = os.MkdirAll(targetPath, 0700)
 		if err != nil {
 			return err
 		}
@@ -199,7 +203,11 @@ func decompress(reader *rardecode.Reader, header *rardecode.FileHeader, filePath
 }
 
 func _decompress(reader *rardecode.Reader, header *rardecode.FileHeader, targetPath string, up model.UpdateProgress) error {
-	f, err := os.OpenFile(stdpath.Join(targetPath, stdpath.Base(header.Name)), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+	destPath, err := tool.SafeExtractPath(targetPath, stdpath.Base(header.Name))
+	if err != nil {
+		return err
+	}
+	f, err := os.OpenFile(destPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
 	if err != nil {
 		return err
 	}

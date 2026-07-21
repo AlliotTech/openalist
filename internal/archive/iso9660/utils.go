@@ -2,9 +2,9 @@ package iso9660
 
 import (
 	"os"
-	stdpath "path"
 	"strings"
 
+	"github.com/AlliotTech/openalist/internal/archive/tool"
 	"github.com/AlliotTech/openalist/internal/errs"
 	"github.com/AlliotTech/openalist/internal/model"
 	"github.com/AlliotTech/openalist/internal/stream"
@@ -62,7 +62,11 @@ func toModelObj(file *iso9660.File) model.Obj {
 }
 
 func decompress(f *iso9660.File, path string, up model.UpdateProgress) error {
-	file, err := os.OpenFile(stdpath.Join(path, f.Name()), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+	destPath, err := tool.SafeExtractPath(path, f.Name())
+	if err != nil {
+		return err
+	}
+	file, err := os.OpenFile(destPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
 	if err != nil {
 		return err
 	}
@@ -84,7 +88,10 @@ func decompressAll(children []*iso9660.File, path string) error {
 			if err != nil {
 				return err
 			}
-			nextPath := stdpath.Join(path, child.Name())
+			nextPath, err := tool.SafeExtractPath(path, child.Name())
+			if err != nil {
+				return err
+			}
 			if err = os.MkdirAll(nextPath, 0700); err != nil {
 				return err
 			}

@@ -114,7 +114,10 @@ func (RarDecoder) Decompress(ss []*stream.SeekableStream, outputPath string, arg
 				}
 				break
 			} else if strings.HasPrefix(name, innerPath+"/") {
-				targetPath := stdpath.Join(outputPath, innerBase)
+				targetPath, err := tool.SafeExtractPath(outputPath, innerBase)
+				if err != nil {
+					return err
+				}
 				if !createdBaseDir {
 					err = os.Mkdir(targetPath, 0700)
 					if err != nil {
