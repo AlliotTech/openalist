@@ -14,7 +14,6 @@ import (
 	"github.com/AlliotTech/openalist/pkg/utils"
 
 	"github.com/AlliotTech/openalist/pkg/http_range"
-	"github.com/aws/aws-sdk-go/aws/awsutil"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -67,8 +66,7 @@ func NewDownloader(options ...func(*Downloader)) *Downloader {
 // memory usage is at about Concurrency*PartSize, use this wisely
 func (d Downloader) Download(ctx context.Context, p *HttpRequestParams) (readCloser io.ReadCloser, err error) {
 
-	var finalP HttpRequestParams
-	awsutil.Copy(&finalP, p)
+	finalP := cloneHttpRequestParams(p)
 	if finalP.Range.Length == -1 {
 		finalP.Range.Length = finalP.Size - finalP.Range.Start
 	}
@@ -449,8 +447,7 @@ func (d *downloader) tryDownloadChunk(params *HttpRequestParams, ch *chunk) (int
 	return n, nil
 }
 func (d *downloader) getParamsFromChunk(ch *chunk) *HttpRequestParams {
-	var params HttpRequestParams
-	awsutil.Copy(&params, d.params)
+	params := cloneHttpRequestParams(d.params)
 
 	// Get the getBuf byte range of data
 	params.Range = http_range.Range{Start: ch.start, Length: ch.size}
@@ -553,6 +550,13 @@ type HttpRequestParams struct {
 	//total file size
 	Size int64
 }
+
+func cloneHttpRequestParams(params *HttpRequestParams) HttpRequestParams {
+	cloned := *params
+	cloned.HeaderRef = params.HeaderRef.Clone()
+	return cloned
+}
+
 type errNeedRetry struct {
 	err error
 }

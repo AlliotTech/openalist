@@ -3,26 +3,23 @@ package s3
 import (
 	"context"
 	"errors"
-	"net/http"
 	"net/url"
 	"path"
 	"strings"
 
+	"github.com/AlliotTech/openalist/drivers/base"
 	"github.com/AlliotTech/openalist/internal/model"
 	"github.com/AlliotTech/openalist/internal/op"
-	"github.com/AlliotTech/openalist/pkg/utils"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/request"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	awsconfig "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	awss3 "github.com/aws/aws-sdk-go-v2/service/s3"
 	log "github.com/sirupsen/logrus"
 )
 
 // do others that not defined in Driver interface
 
-func (d *S3) initSession() error {
-	var err error
+func (d *S3) initSession(ctx context.Context) error {
 	accessKeyID, secretAccessKey, sessionToken := d.AccessKeyID, d.SecretAccessKey, d.SessionToken
 	if d.config.Name == "Doge" {
 		credentialsTmp, err := getCredentials(d.AccessKeyID, d.SecretAccessKey)
@@ -31,34 +28,53 @@ func (d *S3) initSession() error {
 		}
 		accessKeyID, secretAccessKey, sessionToken = credentialsTmp.AccessKeyId, credentialsTmp.SecretAccessKey, credentialsTmp.SessionToken
 	}
-	cfg := &aws.Config{
-		Credentials:      credentials.NewStaticCredentials(accessKeyID, secretAccessKey, sessionToken),
-		Region:           &d.Region,
-		Endpoint:         &d.Endpoint,
-		S3ForcePathStyle: aws.Bool(d.ForcePathStyle),
+	options := []func(*awsconfig.LoadOptions) error{
+		awsconfig.WithRegion(d.Region),
+		awsconfig.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessKeyID, secretAccessKey, sessionToken)),
 	}
-	d.Session, err = session.NewSession(cfg)
-	return err
+	if base.HttpClient != nil {
+		options = append(options, awsconfig.WithHTTPClient(base.HttpClient))
+	}
+	cfg, err := awsconfig.LoadDefaultConfig(ctx, options...)
+	if err != nil {
+		return err
+	}
+	d.awsConfig = cfg
+	d.client = d.newClient(d.Endpoint)
+	d.linkClient = d.client
+	if d.CustomHost != "" && d.EnableCustomHostPresign {
+		d.linkClient = d.newClient(normalizeEndpoint(d.CustomHost))
+	}
+	return nil
 }
 
-func (d *S3) getClient(link bool) *s3.S3 {
-	client := s3.New(d.Session)
-	if link && d.CustomHost != "" {
-		client.Handlers.Build.PushBack(func(r *request.Request) {
-			if r.HTTPRequest.Method != http.MethodGet {
-				return
-			}
-			//判断CustomHost是否以http://或https://开头
-			split := strings.SplitN(d.CustomHost, "://", 2)
-			if utils.SliceContains([]string{"http", "https"}, split[0]) {
-				r.HTTPRequest.URL.Scheme = split[0]
-				r.HTTPRequest.URL.Host = split[1]
-			} else {
-				r.HTTPRequest.URL.Host = d.CustomHost
-			}
-		})
+func (d *S3) newClient(endpoint string) *awss3.Client {
+	return awss3.NewFromConfig(d.awsConfig, func(options *awss3.Options) {
+		if endpoint != "" {
+			options.BaseEndpoint = aws.String(normalizeEndpoint(endpoint))
+		}
+		options.UsePathStyle = d.ForcePathStyle
+	})
+}
+
+func normalizeEndpoint(endpoint string) string {
+	if strings.Contains(endpoint, "://") {
+		return endpoint
 	}
-	return client
+	return "https://" + endpoint
+}
+
+func (d *S3) customObjectURL(key string) (string, error) {
+	endpoint, err := url.Parse(normalizeEndpoint(d.CustomHost))
+	if err != nil {
+		return "", err
+	}
+	objectPath := strings.TrimPrefix(key, "/")
+	if d.ForcePathStyle && !d.RemoveBucket {
+		objectPath = path.Join(d.Bucket, objectPath)
+	}
+	endpoint.Path = strings.TrimSuffix(endpoint.Path, "/") + "/" + objectPath
+	return endpoint.String(), nil
 }
 
 func getKey(path string, dir bool) string {
@@ -78,19 +94,19 @@ func getPlaceholderName(placeholder string) string {
 	return placeholder
 }
 
-func (d *S3) listV1(prefix string, args model.ListArgs) ([]model.Obj, error) {
+func (d *S3) listV1(ctx context.Context, prefix string, args model.ListArgs) ([]model.Obj, error) {
 	prefix = getKey(prefix, true)
 	log.Debugf("list: %s", prefix)
 	files := make([]model.Obj, 0)
 	marker := ""
 	for {
-		input := &s3.ListObjectsInput{
-			Bucket:    &d.Bucket,
-			Marker:    &marker,
-			Prefix:    &prefix,
+		input := &awss3.ListObjectsInput{
+			Bucket:    aws.String(d.Bucket),
+			Marker:    aws.String(marker),
+			Prefix:    aws.String(prefix),
 			Delimiter: aws.String("/"),
 		}
-		listObjectsResult, err := d.client.ListObjects(input)
+		listObjectsResult, err := d.client.ListObjects(ctx, input)
 		if err != nil {
 			return nil, err
 		}
@@ -129,19 +145,19 @@ func (d *S3) listV1(prefix string, args model.ListArgs) ([]model.Obj, error) {
 	return files, nil
 }
 
-func (d *S3) listV2(prefix string, args model.ListArgs) ([]model.Obj, error) {
+func (d *S3) listV2(ctx context.Context, prefix string, args model.ListArgs) ([]model.Obj, error) {
 	prefix = getKey(prefix, true)
 	files := make([]model.Obj, 0)
 	var continuationToken, startAfter *string
 	for {
-		input := &s3.ListObjectsV2Input{
-			Bucket:            &d.Bucket,
+		input := &awss3.ListObjectsV2Input{
+			Bucket:            aws.String(d.Bucket),
 			ContinuationToken: continuationToken,
-			Prefix:            &prefix,
+			Prefix:            aws.String(prefix),
 			Delimiter:         aws.String("/"),
 			StartAfter:        startAfter,
 		}
-		listObjectsResult, err := d.client.ListObjectsV2(input)
+		listObjectsResult, err := d.client.ListObjectsV2(ctx, input)
 		if err != nil {
 			return nil, err
 		}
@@ -172,7 +188,7 @@ func (d *S3) listV2(prefix string, args model.ListArgs) ([]model.Obj, error) {
 			}
 			files = append(files, &file)
 		}
-		if !aws.BoolValue(listObjectsResult.IsTruncated) {
+		if listObjectsResult.IsTruncated == nil || !*listObjectsResult.IsTruncated {
 			break
 		}
 		if listObjectsResult.NextContinuationToken != nil {
@@ -197,12 +213,12 @@ func (d *S3) copy(ctx context.Context, src string, dst string, isDir bool) error
 func (d *S3) copyFile(ctx context.Context, src string, dst string) error {
 	srcKey := getKey(src, false)
 	dstKey := getKey(dst, false)
-	input := &s3.CopyObjectInput{
-		Bucket:     &d.Bucket,
+	input := &awss3.CopyObjectInput{
+		Bucket:     aws.String(d.Bucket),
 		CopySource: aws.String(url.PathEscape(d.Bucket + "/" + srcKey)),
-		Key:        &dstKey,
+		Key:        aws.String(dstKey),
 	}
-	_, err := d.client.CopyObject(input)
+	_, err := d.client.CopyObject(ctx, input)
 	return err
 }
 
@@ -236,23 +252,23 @@ func (d *S3) removeDir(ctx context.Context, src string) error {
 		if obj.IsDir() {
 			err = d.removeDir(ctx, cSrc)
 		} else {
-			err = d.removeFile(cSrc)
+			err = d.removeFile(ctx, cSrc)
 		}
 		if err != nil {
 			return err
 		}
 	}
-	_ = d.removeFile(path.Join(src, getPlaceholderName(d.Placeholder)))
-	_ = d.removeFile(path.Join(src, d.Placeholder))
+	_ = d.removeFile(ctx, path.Join(src, getPlaceholderName(d.Placeholder)))
+	_ = d.removeFile(ctx, path.Join(src, d.Placeholder))
 	return nil
 }
 
-func (d *S3) removeFile(src string) error {
+func (d *S3) removeFile(ctx context.Context, src string) error {
 	key := getKey(src, false)
-	input := &s3.DeleteObjectInput{
-		Bucket: &d.Bucket,
-		Key:    &key,
+	input := &awss3.DeleteObjectInput{
+		Bucket: aws.String(d.Bucket),
+		Key:    aws.String(key),
 	}
-	_, err := d.client.DeleteObject(input)
+	_, err := d.client.DeleteObject(ctx, input)
 	return err
 }
