@@ -35,8 +35,8 @@ github.com/RoaringBitmap/roaring/v2 v2.14.5 h1:ckd0o545JqDPeVJDgeFoaM21eBixUnlWf
 github.com/RoaringBitmap/roaring/v2 v2.14.5/go.mod h1:eq4wdNXxtJIS/oikeCzdX1rBzek7ANzbth041hrU8Q4=
 github.com/STARRY-S/zip v0.2.3 h1:luE4dMvRPDOWQdeDdUxUoZkzUIpTccdKdhHHsQJ1fm4=
 github.com/STARRY-S/zip v0.2.3/go.mod h1:lqJ9JdeRipyOQJrYSOtpNAiaesFO6zVDsE8GIGFaoSk=
-github.com/SheltonZhu/115driver v1.0.34 h1:zhMLp4vgq7GksqvSxQQDOVfK6EOHldQl4b2n8tnZ+EE=
-github.com/SheltonZhu/115driver v1.0.34/go.mod h1:rKvNd4Y4OkXv1TMbr/SKjGdcvMQxh6AW5Tw9w0CJb7E=
+github.com/SheltonZhu/115driver v1.3.4 h1:joUFKN591n7KiTEGnBw0ZHjPzhl3G1PpZrwv2YHhoC8=
+github.com/SheltonZhu/115driver v1.3.4/go.mod h1:OujS7azslg1/bn85sPSHnNsp4/WBI9/TiijtZL9kuSQ=
 github.com/Xhofe/go-cache v0.0.0-20240804043513-b1a71927bc21 h1:h6q5E9aMBhhdqouW81LozVPI1I+Pu6IxL2EKpfm5OjY=
 github.com/Xhofe/go-cache v0.0.0-20240804043513-b1a71927bc21/go.mod h1:sSBbaOg90XwWKtpT56kVujF0bIeVITnPlssLclogS04=
 github.com/Xhofe/rateg v0.0.0-20230728072201-251a4e1adad4 h1:WnvifFgYyogPz2ZFvaVLk4gI/Co0paF92FmxSR6U1zY=
