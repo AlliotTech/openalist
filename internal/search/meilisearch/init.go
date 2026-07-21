@@ -3,6 +3,8 @@ package meilisearch
 import (
 	"errors"
 	"fmt"
+	"time"
+
 	"github.com/AlliotTech/openalist/internal/conf"
 	"github.com/AlliotTech/openalist/internal/model"
 	"github.com/AlliotTech/openalist/internal/search/searcher"
@@ -18,12 +20,12 @@ var config = searcher.Config{
 func init() {
 	searcher.RegisterSearcher(config, func() (searcher.Searcher, error) {
 		m := Meilisearch{
-			Client: meilisearch.NewClient(meilisearch.ClientConfig{
-				Host:   conf.Conf.Meilisearch.Host,
-				APIKey: conf.Conf.Meilisearch.APIKey,
-			}),
+			Client: meilisearch.New(
+				conf.Conf.Meilisearch.Host,
+				meilisearch.WithAPIKey(conf.Conf.Meilisearch.APIKey),
+			),
 			IndexUid:             conf.Conf.Meilisearch.IndexPrefix + "alist",
-			FilterableAttributes: []string{"parent", "is_dir", "name"},
+			FilterableAttributes: []interface{}{"parent", "is_dir", "name"},
 			SearchableAttributes: []string{"name"},
 		}
 
@@ -39,7 +41,7 @@ func init() {
 				if err != nil {
 					return nil, err
 				}
-				forTask, err := m.Client.WaitForTask(task.TaskUID)
+				forTask, err := m.Client.WaitForTask(task.TaskUID, time.Second)
 				if err != nil {
 					return nil, err
 				}
@@ -50,22 +52,22 @@ func init() {
 				return nil, err
 			}
 		}
-		attributes, err := m.Client.Index(m.IndexUid).GetFilterableAttributes()
+		filterableAttributes, err := m.Client.Index(m.IndexUid).GetFilterableAttributes()
 		if err != nil {
 			return nil, err
 		}
-		if attributes == nil || !utils.SliceAllContains(*attributes, m.FilterableAttributes...) {
+		if filterableAttributes == nil || !utils.SliceAllContains(*filterableAttributes, m.FilterableAttributes...) {
 			_, err = m.Client.Index(m.IndexUid).UpdateFilterableAttributes(&m.FilterableAttributes)
 			if err != nil {
 				return nil, err
 			}
 		}
 
-		attributes, err = m.Client.Index(m.IndexUid).GetSearchableAttributes()
+		searchableAttributes, err := m.Client.Index(m.IndexUid).GetSearchableAttributes()
 		if err != nil {
 			return nil, err
 		}
-		if attributes == nil || !utils.SliceAllContains(*attributes, m.SearchableAttributes...) {
+		if searchableAttributes == nil || !utils.SliceAllContains(*searchableAttributes, m.SearchableAttributes...) {
 			_, err = m.Client.Index(m.IndexUid).UpdateSearchableAttributes(&m.SearchableAttributes)
 			if err != nil {
 				return nil, err

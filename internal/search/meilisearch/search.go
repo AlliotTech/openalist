@@ -3,14 +3,15 @@ package meilisearch
 import (
 	"context"
 	"fmt"
+	"path"
+	"strings"
+	"time"
+
 	"github.com/AlliotTech/openalist/internal/model"
 	"github.com/AlliotTech/openalist/internal/search/searcher"
 	"github.com/AlliotTech/openalist/pkg/utils"
 	"github.com/google/uuid"
 	"github.com/meilisearch/meilisearch-go"
-	"path"
-	"strings"
-	"time"
 )
 
 type searchDocument struct {
@@ -19,9 +20,9 @@ type searchDocument struct {
 }
 
 type Meilisearch struct {
-	Client               *meilisearch.Client
+	Client               meilisearch.ServiceManager
 	IndexUid             string
-	FilterableAttributes []string
+	FilterableAttributes []interface{}
 	SearchableAttributes []string
 }
 
@@ -30,26 +31,25 @@ func (m *Meilisearch) Config() searcher.Config {
 }
 
 func (m *Meilisearch) Search(ctx context.Context, req model.SearchReq) ([]model.SearchNode, int64, error) {
+	hitsPerPage := int64(req.PerPage)
 	mReq := &meilisearch.SearchRequest{
 		AttributesToSearchOn: m.SearchableAttributes,
 		Page:                 int64(req.Page),
-		HitsPerPage:          int64(req.PerPage),
+		HitsPerPage:          &hitsPerPage,
 	}
 	if req.Scope != 0 {
 		mReq.Filter = fmt.Sprintf("is_dir = %v", req.Scope == 1)
 	}
-	search, err := m.Client.Index(m.IndexUid).Search(req.Keywords, mReq)
+	search, err := m.Client.Index(m.IndexUid).SearchWithContext(ctx, req.Keywords, mReq)
 	if err != nil {
 		return nil, 0, err
 	}
-	nodes, err := utils.SliceConvert(search.Hits, func(src any) (model.SearchNode, error) {
-		srcMap := src.(map[string]any)
-		return model.SearchNode{
-			Parent: srcMap["parent"].(string),
-			Name:   srcMap["name"].(string),
-			IsDir:  srcMap["is_dir"].(bool),
-			Size:   int64(srcMap["size"].(float64)),
-		}, nil
+	nodes, err := utils.SliceConvert(search.Hits, func(src meilisearch.Hit) (model.SearchNode, error) {
+		var document searchDocument
+		if err := src.DecodeInto(&document); err != nil {
+			return model.SearchNode{}, err
+		}
+		return document.SearchNode, nil
 	})
 	if err != nil {
 		return nil, 0, err
@@ -70,7 +70,7 @@ func (m *Meilisearch) BatchIndex(ctx context.Context, nodes []model.SearchNode) 
 		}, nil
 	})
 
-	_, err := m.Client.Index(m.IndexUid).AddDocuments(documents)
+	_, err := m.Client.Index(m.IndexUid).AddDocumentsWithContext(ctx, documents, nil)
 	if err != nil {
 		return err
 	}
@@ -91,23 +91,19 @@ func (m *Meilisearch) BatchIndex(ctx context.Context, nodes []model.SearchNode) 
 
 func (m *Meilisearch) getDocumentsByParent(ctx context.Context, parent string) ([]*searchDocument, error) {
 	var result meilisearch.DocumentsResult
-	err := m.Client.Index(m.IndexUid).GetDocuments(&meilisearch.DocumentsQuery{
+	err := m.Client.Index(m.IndexUid).GetDocumentsWithContext(ctx, &meilisearch.DocumentsQuery{
 		Filter: fmt.Sprintf("parent = '%s'", strings.ReplaceAll(parent, "'", "\\'")),
 		Limit:  int64(model.MaxInt),
 	}, &result)
 	if err != nil {
 		return nil, err
 	}
-	return utils.SliceConvert(result.Results, func(src map[string]any) (*searchDocument, error) {
-		return &searchDocument{
-			ID: src["id"].(string),
-			SearchNode: model.SearchNode{
-				Parent: src["parent"].(string),
-				Name:   src["name"].(string),
-				IsDir:  src["is_dir"].(bool),
-				Size:   int64(src["size"].(float64)),
-			},
-		}, nil
+	return utils.SliceConvert(result.Results, func(src meilisearch.Hit) (*searchDocument, error) {
+		var document searchDocument
+		if err := src.DecodeInto(&document); err != nil {
+			return nil, err
+		}
+		return &document, nil
 	})
 }
 
@@ -154,7 +150,7 @@ func (m *Meilisearch) DelDirChild(ctx context.Context, prefix string) error {
 		return "'" + strings.ReplaceAll(src, "'", "\\'") + "'"
 	})
 	s := fmt.Sprintf("parent IN [%s]", strings.Join(dfs, ","))
-	task, err := m.Client.Index(m.IndexUid).DeleteDocumentsByFilter(s)
+	task, err := m.Client.Index(m.IndexUid).DeleteDocumentsByFilterWithContext(ctx, s, nil)
 	if err != nil {
 		return err
 	}
@@ -192,7 +188,7 @@ func (m *Meilisearch) Del(ctx context.Context, prefix string) error {
 			return err
 		}
 	}
-	task, err := m.Client.Index(m.IndexUid).DeleteDocument(document.ID)
+	task, err := m.Client.Index(m.IndexUid).DeleteDocumentWithContext(ctx, document.ID, nil)
 	if err != nil {
 		return err
 	}
@@ -211,15 +207,12 @@ func (m *Meilisearch) Release(ctx context.Context) error {
 }
 
 func (m *Meilisearch) Clear(ctx context.Context) error {
-	_, err := m.Client.Index(m.IndexUid).DeleteAllDocuments()
+	_, err := m.Client.Index(m.IndexUid).DeleteAllDocumentsWithContext(ctx, nil)
 	return err
 }
 
 func (m *Meilisearch) getTaskStatus(ctx context.Context, taskUID int64) (meilisearch.TaskStatus, error) {
-	forTask, err := m.Client.WaitForTask(taskUID, meilisearch.WaitParams{
-		Context:  ctx,
-		Interval: time.Second,
-	})
+	forTask, err := m.Client.WaitForTaskWithContext(ctx, taskUID, time.Second)
 	if err != nil {
 		return meilisearch.TaskStatusUnknown, err
 	}
