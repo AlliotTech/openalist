@@ -15,7 +15,7 @@ import (
 	"github.com/AlliotTech/openalist/pkg/utils/random"
 	"github.com/AlliotTech/openalist/server/common"
 	"github.com/gin-gonic/gin"
-	"gopkg.in/ldap.v3"
+	"github.com/go-ldap/ldap/v3"
 )
 
 func LoginLdap(c *gin.Context) {
