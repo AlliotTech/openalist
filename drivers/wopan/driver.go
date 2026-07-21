@@ -3,8 +3,10 @@ package template
 import (
 	"context"
 	"fmt"
+	"os"
 	"strconv"
 
+	"github.com/AlliotTech/openalist/internal/conf"
 	"github.com/AlliotTech/openalist/internal/driver"
 	"github.com/AlliotTech/openalist/internal/model"
 	"github.com/AlliotTech/openalist/internal/op"
@@ -152,10 +154,26 @@ func (d *Wopan) Remove(ctx context.Context, obj model.Obj) error {
 }
 
 func (d *Wopan) Put(ctx context.Context, dstDir model.Obj, stream model.FileStreamer, up driver.UpdateProgress) error {
-	_, err := d.client.Upload2C(d.getSpaceType(), wopan.Upload2CFile{
+	tempFile, err := os.CreateTemp(conf.Conf.TempDir, "wopan-upload-*")
+	if err != nil {
+		return err
+	}
+	tempPath := tempFile.Name()
+	defer func() {
+		_ = tempFile.Close()
+		_ = os.Remove(tempPath)
+	}()
+	if err := utils.CopyWithCtx(ctx, tempFile, driver.NewLimitedUploadStream(ctx, stream), stream.GetSize(), nil); err != nil {
+		return err
+	}
+	if _, err := tempFile.Seek(0, 0); err != nil {
+		return err
+	}
+
+	_, err = d.client.Upload2C(d.getSpaceType(), wopan.Upload2CFile{
 		Name:        stream.GetName(),
 		Size:        stream.GetSize(),
-		Content:     driver.NewLimitedUploadStream(ctx, stream),
+		Content:     tempFile,
 		ContentType: stream.GetMimetype(),
 	}, dstDir.GetID(), d.FamilyID, wopan.Upload2COption{
 		OnProgress: func(current, total int64) {

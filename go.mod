@@ -63,7 +63,7 @@ require (
 	github.com/upyun/go-sdk/v3 v3.0.4
 	github.com/winfsp/cgofuse v1.6.1-0.20260126094232-f2c4fccdb286
 	github.com/xhofe/tache v0.1.6
-	github.com/xhofe/wopan-sdk-go v0.1.3
+	github.com/xhofe/wopan-sdk-go v0.2.0
 	github.com/yeka/zip v0.0.0-20231116150916-03d6312748a9
 	github.com/zzzhr1990/go-common-entity v0.0.0-20221216044934-fd1c571e3a22
 	golang.org/x/crypto v0.54.0

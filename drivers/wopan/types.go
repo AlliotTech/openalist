@@ -10,7 +10,7 @@ type Object struct {
 	FID string
 }
 
-func fileToObj(file wopan.File) (model.Obj, error) {
+func fileToObj(file *wopan.File) (model.Obj, error) {
 	t, err := getTime(file.CreateTime)
 	if err != nil {
 		return nil, err
