@@ -130,8 +130,9 @@ func localProxy(c *gin.Context, link *model.Link, file model.Obj, proxyRange boo
 	}
 	Writer := &common.WrittenResponseWriter{ResponseWriter: c.Writer}
 
-	//优先处理md文件
-	if utils.Ext(file.GetName()) == "md" && setting.GetBool(conf.FilterReadMeScripts) {
+	// Convert Markdown only for browser document requests. API clients such as the
+	// text editor need the original source instead of rendered HTML.
+	if shouldConvertMarkdown(file.GetName(), setting.GetBool(conf.FilterReadMeScripts), c.GetHeader("Accept")) {
 		buf := bytes.NewBuffer(make([]byte, 0, file.GetSize()))
 		w := &common.InterceptResponseWriter{ResponseWriter: Writer, Writer: buf}
 		err = common.Proxy(w, c.Request, link, file)
@@ -165,6 +166,12 @@ func localProxy(c *gin.Context, link *model.Link, file model.Obj, proxyRange boo
 	} else {
 		common.ErrorResp(c, err, 500, true)
 	}
+}
+
+func shouldConvertMarkdown(filename string, filter bool, accept string) bool {
+	return utils.Ext(filename) == "md" &&
+		filter &&
+		strings.Contains(strings.ToLower(accept), "text/html")
 }
 
 // TODO need optimize
