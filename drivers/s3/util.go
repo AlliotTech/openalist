@@ -14,6 +14,7 @@ import (
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	awss3 "github.com/aws/aws-sdk-go-v2/service/s3"
+	smithyendpoints "github.com/aws/smithy-go/endpoints"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -43,7 +44,10 @@ func (d *S3) initSession(ctx context.Context) error {
 	d.client = d.newClient(d.Endpoint)
 	d.linkClient = d.client
 	if d.CustomHost != "" && d.EnableCustomHostPresign {
-		d.linkClient = d.newClient(normalizeEndpoint(d.CustomHost))
+		d.linkClient, err = d.newCustomHostClient()
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -55,6 +59,33 @@ func (d *S3) newClient(endpoint string) *awss3.Client {
 		}
 		options.UsePathStyle = d.ForcePathStyle
 	})
+}
+
+type customHostEndpointResolver struct {
+	endpoint url.URL
+}
+
+func (r customHostEndpointResolver) ResolveEndpoint(
+	_ context.Context,
+	params awss3.EndpointParameters,
+) (smithyendpoints.Endpoint, error) {
+	endpoint := r.endpoint
+	if aws.ToBool(params.ForcePathStyle) && params.Bucket != nil {
+		endpoint = *endpoint.JoinPath(*params.Bucket)
+	}
+	return smithyendpoints.Endpoint{URI: endpoint}, nil
+}
+
+func (d *S3) newCustomHostClient() (*awss3.Client, error) {
+	endpoint, err := url.Parse(normalizeEndpoint(d.CustomHost))
+	if err != nil {
+		return nil, err
+	}
+	client := awss3.NewFromConfig(d.awsConfig, func(options *awss3.Options) {
+		options.EndpointResolverV2 = customHostEndpointResolver{endpoint: *endpoint}
+		options.UsePathStyle = d.ForcePathStyle
+	})
+	return client, nil
 }
 
 func normalizeEndpoint(endpoint string) string {

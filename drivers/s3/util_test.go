@@ -1,8 +1,11 @@
 package s3
 
 import (
+	"context"
+	"net/url"
 	"testing"
 
+	"github.com/AlliotTech/openalist/internal/model"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -48,6 +51,60 @@ func TestCustomObjectURL(t *testing.T) {
 			got, err := tt.driver.customObjectURL(tt.key)
 			require.NoError(t, err)
 			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestCustomHostPresign(t *testing.T) {
+	tests := []struct {
+		name           string
+		forcePathStyle bool
+		removeBucket   bool
+		wantHost       string
+		wantPath       string
+	}{
+		{
+			name:     "virtual host style keeps custom host",
+			wantHost: "cdn.example.com",
+			wantPath: "/base/dir/file.txt",
+		},
+		{
+			name:           "path style keeps bucket in path",
+			forcePathStyle: true,
+			wantHost:       "cdn.example.com",
+			wantPath:       "/base/bucket/dir/file.txt",
+		},
+		{
+			name:           "remove bucket keeps custom host",
+			forcePathStyle: true,
+			removeBucket:   true,
+			wantHost:       "cdn.example.com",
+			wantPath:       "/base/dir/file.txt",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			d := S3{Addition: Addition{
+				AccessKeyID:             "access-key",
+				SecretAccessKey:         "secret-key",
+				Region:                  "us-east-1",
+				Bucket:                  "bucket",
+				CustomHost:              "https://cdn.example.com/base",
+				EnableCustomHostPresign: true,
+				ForcePathStyle:          tt.forcePathStyle,
+				RemoveBucket:            tt.removeBucket,
+				SignURLExpire:           1,
+			}}
+			require.NoError(t, d.Init(context.Background()))
+
+			link, err := d.Link(context.Background(), &model.Object{Path: "/dir/file.txt"}, model.LinkArgs{})
+			require.NoError(t, err)
+			parsed, err := url.Parse(link.URL)
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantHost, parsed.Host)
+			assert.Equal(t, tt.wantPath, parsed.Path)
+			assert.NotEmpty(t, parsed.Query().Get("X-Amz-Signature"))
 		})
 	}
 }
