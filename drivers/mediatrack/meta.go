@@ -6,8 +6,9 @@ import (
 )
 
 type Addition struct {
-	AccessToken string `json:"access_token" required:"true"`
-	ProjectID   string `json:"project_id"`
+	AccessToken       string `json:"access_token" required:"true"`
+	ProjectID         string `json:"project_id"`
+	DeviceFingerprint string `json:"device_fingerprint" required:"true"`
 	driver.RootID
 	OrderBy   string `json:"order_by" type:"select" options:"updated_at,title,size" default:"title"`
 	OrderDesc bool   `json:"order_desc"`

@@ -20,9 +20,11 @@ import (
 )
 
 const (
-	Api          = "https://www.123pan.com/api"
-	AApi         = "https://www.123pan.com/a/api"
-	BApi         = "https://www.123pan.com/b/api"
+	webOrigin    = "https://yun.123pan.com"
+	webReferer   = webOrigin + "/"
+	Api          = webOrigin + "/api"
+	AApi         = webOrigin + "/a/api"
+	BApi         = webOrigin + "/b/api"
 	MainApi      = BApi
 	FileList     = MainApi + "/share/get"
 	DownloadInfo = MainApi + "/share/download/info"
@@ -58,8 +60,8 @@ func (d *Pan123Share) request(url string, method string, callback base.ReqCallba
 	}
 	req := base.RestyClient.R()
 	req.SetHeaders(map[string]string{
-		"origin":        "https://www.123pan.com",
-		"referer":       "https://www.123pan.com/",
+		"origin":        webOrigin,
+		"referer":       webReferer,
 		"authorization": "Bearer " + d.AccessToken,
 		"user-agent":    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) alist-client",
 		"platform":      "web",

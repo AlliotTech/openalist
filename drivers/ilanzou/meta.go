@@ -42,7 +42,7 @@ func init() {
 				NoOverwriteUpload: false,
 			},
 			conf: Conf{
-				base:       "https://api.ilanzou.com",
+				base:       "https://apis.ilanzou.com",
 				secret:     []byte("lanZouY-disk-app"),
 				bucket:     "wpanstore-lanzou",
 				unproved:   "unproved",

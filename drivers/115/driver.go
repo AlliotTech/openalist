@@ -2,14 +2,15 @@ package _115
 
 import (
 	"context"
+	"net/http"
 	"strings"
 	"sync"
 
-	driver115 "github.com/SheltonZhu/115driver/pkg/driver"
 	"github.com/AlliotTech/openalist/internal/driver"
 	"github.com/AlliotTech/openalist/internal/model"
 	"github.com/AlliotTech/openalist/pkg/http_range"
 	"github.com/AlliotTech/openalist/pkg/utils"
+	driver115 "github.com/SheltonZhu/115driver/pkg/driver"
 	"github.com/pkg/errors"
 	"golang.org/x/time/rate"
 )
@@ -74,9 +75,19 @@ func (d *Pan115) Link(ctx context.Context, file model.Obj, args model.LinkArgs) 
 	}
 	link := &model.Link{
 		URL:    downloadInfo.Url.Url,
-		Header: downloadInfo.Header,
+		Header: withDownloadCookie(downloadInfo.Header, d.Cookie),
 	}
 	return link, nil
+}
+
+func withDownloadCookie(header http.Header, cookie string) http.Header {
+	if header == nil {
+		header = http.Header{}
+	}
+	if header.Get("Cookie") == "" && cookie != "" {
+		header.Set("Cookie", cookie)
+	}
+	return header
 }
 
 func (d *Pan115) MakeDir(ctx context.Context, parentDir model.Obj, dirName string) (model.Obj, error) {
