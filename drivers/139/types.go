@@ -58,8 +58,8 @@ type Content struct {
 	CreateTime string `json:"createTime"`
 	UpdateTime string `json:"updateTime"`
 	//CommentCount    int         `json:"commentCount"`
-	ThumbnailURL string `json:"thumbnailURL"`
-	//BigthumbnailURL string      `json:"bigthumbnailURL"`
+	ThumbnailURL    string `json:"thumbnailURL"`
+	BigthumbnailURL string `json:"bigthumbnailURL"`
 	//PresentURL      string      `json:"presentURL"`
 	//PresentLURL     string      `json:"presentLURL"`
 	//PresentHURL     string      `json:"presentHURL"`
@@ -165,7 +165,7 @@ type CloudContent struct {
 	LastUpdateTime string `json:"lastUpdateTime"`
 	ThumbnailURL   string `json:"thumbnailURL"`
 	//MidthumbnailURL  string      `json:"midthumbnailURL"`
-	//BigthumbnailURL  string      `json:"bigthumbnailURL"`
+	BigthumbnailURL string `json:"bigthumbnailURL"`
 	//PresentURL       string      `json:"presentURL"`
 	//PresentLURL      string      `json:"presentLURL"`
 	//PresentHURL      string      `json:"presentHURL"`
