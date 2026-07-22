@@ -3,6 +3,7 @@ package template
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"strconv"
 
@@ -13,6 +14,11 @@ import (
 	"github.com/AlliotTech/openalist/pkg/utils"
 	"github.com/go-resty/resty/v2"
 	"github.com/xhofe/wopan-sdk-go"
+)
+
+const (
+	wopanPrepareProgress = 10.0
+	wopanUploadProgress  = 100.0 - wopanPrepareProgress
 )
 
 type Wopan struct {
@@ -154,34 +160,84 @@ func (d *Wopan) Remove(ctx context.Context, obj model.Obj) error {
 }
 
 func (d *Wopan) Put(ctx context.Context, dstDir model.Obj, stream model.FileStreamer, up driver.UpdateProgress) error {
-	tempFile, err := os.CreateTemp(conf.Conf.TempDir, "wopan-upload-*")
+	uploadFile, cleanup, err := prepareWopanUploadFile(ctx, stream, up)
 	if err != nil {
 		return err
 	}
-	tempPath := tempFile.Name()
-	defer func() {
-		_ = tempFile.Close()
-		_ = os.Remove(tempPath)
-	}()
-	if err := utils.CopyWithCtx(ctx, tempFile, driver.NewLimitedUploadStream(ctx, stream), stream.GetSize(), nil); err != nil {
-		return err
-	}
-	if _, err := tempFile.Seek(0, 0); err != nil {
-		return err
-	}
+	defer cleanup()
 
 	_, err = d.client.Upload2C(d.getSpaceType(), wopan.Upload2CFile{
 		Name:        stream.GetName(),
 		Size:        stream.GetSize(),
-		Content:     tempFile,
+		Content:     uploadFile,
 		ContentType: stream.GetMimetype(),
 	}, dstDir.GetID(), d.FamilyID, wopan.Upload2COption{
 		OnProgress: func(current, total int64) {
-			up(100 * float64(current) / float64(total))
+			if up == nil {
+				return
+			}
+			if total <= 0 {
+				up(100)
+				return
+			}
+			percentage := min(float64(current)/float64(total), 1)
+			up(wopanPrepareProgress + wopanUploadProgress*percentage)
 		},
 		Ctx: ctx,
 	})
 	return err
+}
+
+func prepareWopanUploadFile(
+	ctx context.Context,
+	stream model.FileStreamer,
+	up driver.UpdateProgress,
+) (*os.File, func(), error) {
+	if uploadFile, ok := stream.GetFile().(*os.File); ok {
+		if _, err := uploadFile.Seek(0, io.SeekStart); err != nil {
+			return nil, nil, err
+		}
+		if up != nil {
+			up(wopanPrepareProgress)
+		}
+		return uploadFile, func() {}, nil
+	}
+
+	tempDir := ""
+	if conf.Conf != nil {
+		tempDir = conf.Conf.TempDir
+	}
+	tempFile, err := os.CreateTemp(tempDir, "wopan-upload-*")
+	if err != nil {
+		return nil, nil, err
+	}
+	cleanup := func() {
+		_ = tempFile.Close()
+		_ = os.Remove(tempFile.Name())
+	}
+	cacheProgress := func(percentage float64) {
+		if up != nil {
+			up(wopanPrepareProgress * min(percentage, 100) / 100)
+		}
+	}
+	if err := utils.CopyWithCtx(
+		ctx,
+		tempFile,
+		driver.NewLimitedUploadStream(ctx, stream),
+		stream.GetSize(),
+		cacheProgress,
+	); err != nil {
+		cleanup()
+		return nil, nil, err
+	}
+	if _, err := tempFile.Seek(0, io.SeekStart); err != nil {
+		cleanup()
+		return nil, nil, err
+	}
+	if up != nil {
+		up(wopanPrepareProgress)
+	}
+	return tempFile, cleanup, nil
 }
 
 //func (d *Wopan) Other(ctx context.Context, args model.OtherArgs) (interface{}, error) {
