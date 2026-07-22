@@ -11,7 +11,7 @@ type Addition struct {
 	Username string `json:"username" required:"true"`
 	Password string `json:"password" required:"true"`
 	driver.RootPath
-	TlsInsecureSkipVerify bool `json:"tls_insecure_skip_verify" default:"false"`
+	TlsInsecureSkipVerify bool `json:"tls_insecure_skip_verify" default:"false" help:"Disable TLS certificate verification for this storage only; use only with trusted endpoints"`
 }
 
 var config = driver.Config{

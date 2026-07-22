@@ -2,12 +2,16 @@ package webdav
 
 import (
 	"context"
+	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"path"
 	"time"
 
+	"github.com/AlliotTech/openalist/drivers/base"
 	"github.com/AlliotTech/openalist/internal/driver"
+	"github.com/AlliotTech/openalist/internal/errs"
 	"github.com/AlliotTech/openalist/internal/model"
 	"github.com/AlliotTech/openalist/pkg/cron"
 	"github.com/AlliotTech/openalist/pkg/gowebdav"
@@ -50,10 +54,11 @@ func (d *WebDav) Drop(ctx context.Context) error {
 func (d *WebDav) List(ctx context.Context, dir model.Obj, args model.ListArgs) ([]model.Obj, error) {
 	files, err := d.client.ReadDir(dir.GetPath())
 	if err != nil {
-		return nil, err
+		return nil, mapWebDAVError(err)
 	}
 	return utils.SliceConvert(files, func(src os.FileInfo) (model.Obj, error) {
 		return &model.Object{
+			Path:     path.Join(dir.GetPath(), src.Name()),
 			Name:     src.Name(),
 			Size:     src.Size(),
 			Modified: src.ModTime(),
@@ -67,10 +72,56 @@ func (d *WebDav) Link(ctx context.Context, file model.Obj, args model.LinkArgs) 
 	if err != nil {
 		return nil, err
 	}
+	if args.Redirect {
+		url, header, err = resolveWebDAVRedirect(ctx, url, header)
+		if err != nil {
+			return nil, err
+		}
+	}
 	return &model.Link{
 		URL:    url,
 		Header: header,
 	}, nil
+}
+
+func resolveWebDAVRedirect(ctx context.Context, rawURL string, header http.Header) (string, http.Header, error) {
+	req := base.NoRedirectClient.R().SetContext(ctx).SetDoNotParseResponse(true)
+	req.Header = header.Clone()
+	res, err := req.Get(rawURL)
+	if err != nil {
+		return "", nil, err
+	}
+	if res.RawResponse != nil && res.RawResponse.Body != nil {
+		defer res.RawResponse.Body.Close()
+	}
+	switch res.StatusCode() {
+	case http.StatusMovedPermanently, http.StatusFound, http.StatusSeeOther, http.StatusTemporaryRedirect, http.StatusPermanentRedirect:
+	default:
+		return "", nil, fmt.Errorf("redirect failed, status: %d", res.StatusCode())
+	}
+	location := res.Header().Get("Location")
+	if location == "" {
+		return "", nil, fmt.Errorf("redirect failed: location is empty")
+	}
+	origin, err := url.Parse(rawURL)
+	if err != nil {
+		return "", nil, err
+	}
+	target, err := origin.Parse(location)
+	if err != nil {
+		return "", nil, err
+	}
+	resultHeader := header.Clone()
+	if !sameOrigin(origin, target) {
+		resultHeader.Del("Authorization")
+		resultHeader.Del("Cookie")
+		resultHeader.Del("Proxy-Authorization")
+	}
+	return target.String(), resultHeader, nil
+}
+
+func sameOrigin(a, b *url.URL) bool {
+	return a.Scheme == b.Scheme && a.Host == b.Host
 }
 
 func (d *WebDav) MakeDir(ctx context.Context, parentDir model.Obj, dirName string) error {
@@ -106,4 +157,27 @@ func (d *WebDav) Put(ctx context.Context, dstDir model.Obj, s model.FileStreamer
 	return err
 }
 
+func (d *WebDav) Get(ctx context.Context, objPath string) (model.Obj, error) {
+	objPath = path.Join(d.GetRootPath(), objPath)
+	info, err := d.client.Stat(objPath)
+	if err != nil {
+		return nil, mapWebDAVError(err)
+	}
+	return &model.Object{
+		Name:     info.Name(),
+		Size:     info.Size(),
+		Modified: info.ModTime(),
+		IsFolder: info.IsDir(),
+		Path:     objPath,
+	}, nil
+}
+
+func mapWebDAVError(err error) error {
+	if gowebdav.IsErrNotFound(err) {
+		return errs.ObjectNotFound
+	}
+	return err
+}
+
 var _ driver.Driver = (*WebDav)(nil)
+var _ driver.Getter = (*WebDav)(nil)
