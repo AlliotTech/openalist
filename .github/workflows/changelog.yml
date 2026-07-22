@@ -35,6 +35,19 @@ jobs:
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/git/ref/tags/${TAG_NAME}" \
             >/dev/null
 
+      - name: Remove existing release for this tag
+        env:
+          GH_TOKEN: ${{ secrets.MY_TOKEN }}
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          release_id=$(gh api \
+            "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG_NAME}" \
+            --jq '.id' 2>/dev/null || true)
+          if [ -n "$release_id" ]; then
+            gh api --method DELETE \
+              "repos/${GITHUB_REPOSITORY}/releases/${release_id}"
+          fi
+
       - name: Create GitHub release
         run: npx --yes changelogithub@13.16.1
         env:
