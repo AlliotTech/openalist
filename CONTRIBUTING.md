@@ -2,31 +2,59 @@
 
 ## Setup your machine
 
-`alist` is written in [Go](https://golang.org/) and [React](https://reactjs.org/).
+The OpenAList backend is written in [Go](https://go.dev/), and the frontend is built with [SolidJS](https://www.solidjs.com/).
 
 Prerequisites:
 
 - [git](https://git-scm.com)
-- [Go 1.20+](https://golang.org/doc/install)
+- [Go 1.25+](https://go.dev/doc/install)
 - [gcc](https://gcc.gnu.org/)
-- [nodejs](https://nodejs.org/)
+- [Node.js 22.22.1+](https://nodejs.org/)
+- [pnpm 11](https://pnpm.io/installation)
 
-Clone `alist` and `alist-web` anywhere:
+Clone the backend and frontend as sibling directories:
 
 ```shell
-$ git clone https://github.com/AlliotTech/openalist.git
-$ git clone --recurse-submodules https://github.com/AlliotTech/openalist-web.git
+git clone https://github.com/AlliotTech/openalist.git
+git clone --recurse-submodules https://github.com/AlliotTech/openalist-web.git
 ```
 You should switch to the `main` branch for development.
 
-## Preview your change
-### backend
+Install the frontend dependencies:
+
 ```shell
-$ go run main.go
+cd openalist-web
+pnpm install --frozen-lockfile
 ```
-### frontend
+
+## Preview your change
+
+Start the backend and frontend together from the backend repository:
+
 ```shell
-$ pnpm dev
+cd ../openalist
+./dev.sh
+```
+
+The script expects the frontend at `../openalist-web`. Set `OPENALIST_WEB_DIR` if it is stored elsewhere, and set `OPENALIST_DATA_DIR` to use a different development data directory.
+
+To start only the backend:
+
+```shell
+go run . server --dev --data ./data-dev
+```
+
+To start only the frontend:
+
+```shell
+cd ../openalist-web
+pnpm dev
+```
+
+Run the backend tests before submitting a pull request:
+
+```shell
+go test ./...
 ```
 
 ## Add a new driver
