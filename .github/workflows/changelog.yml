@@ -40,10 +40,9 @@ jobs:
           GH_TOKEN: ${{ secrets.MY_TOKEN }}
           TAG_NAME: ${{ github.ref_name }}
         run: |
-          release_id=$(gh api \
+          if release_id=$(gh api \
             "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG_NAME}" \
-            --jq '.id' 2>/dev/null || true)
-          if [ -n "$release_id" ]; then
+            --jq '.id' 2>/dev/null); then
             gh api --method DELETE \
               "repos/${GITHUB_REPOSITORY}/releases/${release_id}"
           fi
