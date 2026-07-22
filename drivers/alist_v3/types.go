@@ -1,6 +1,7 @@
 package alist_v3
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/AlliotTech/openalist/internal/model"
@@ -72,15 +73,26 @@ type LoginResp struct {
 }
 
 type MeResp struct {
-	Id         int    `json:"id"`
-	Username   string `json:"username"`
-	Password   string `json:"password"`
-	BasePath   string `json:"base_path"`
-	Role       int    `json:"role"`
-	Disabled   bool   `json:"disabled"`
-	Permission int    `json:"permission"`
-	SsoId      string `json:"sso_id"`
-	Otp        bool   `json:"otp"`
+	Id         int      `json:"id"`
+	Username   string   `json:"username"`
+	Password   string   `json:"password"`
+	BasePath   string   `json:"base_path"`
+	Role       IntSlice `json:"role"`
+	Disabled   bool     `json:"disabled"`
+	Permission int      `json:"permission"`
+	SsoId      string   `json:"sso_id"`
+	Otp        bool     `json:"otp"`
+}
+
+type IntSlice []int
+
+func (s *IntSlice) UnmarshalJSON(data []byte) error {
+	var role int
+	if err := json.Unmarshal(data, &role); err == nil {
+		*s = []int{role}
+		return nil
+	}
+	return json.Unmarshal(data, (*[]int)(s))
 }
 
 type ArchiveMetaReq struct {

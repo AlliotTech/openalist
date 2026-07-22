@@ -10,6 +10,7 @@ import (
 
 	"github.com/AlliotTech/openalist/drivers/base"
 	"github.com/AlliotTech/openalist/internal/driver"
+	drivererrs "github.com/AlliotTech/openalist/internal/errs"
 	"github.com/AlliotTech/openalist/internal/model"
 	"github.com/AlliotTech/openalist/internal/op"
 	streamPkg "github.com/AlliotTech/openalist/internal/stream"
@@ -566,6 +567,9 @@ func (xc *XunLeiBrowserCommon) SetSpaceTokenResp(spaceToken string) {
 
 // Request 携带Authorization和CaptchaToken的请求
 func (xc *XunLeiBrowserCommon) Request(url string, method string, callback base.ReqCallback, resp interface{}) ([]byte, error) {
+	if xc.TokenResp == nil {
+		return nil, drivererrs.EmptyToken
+	}
 	data, err := xc.Common.Request(url, method, func(req *resty.Request) {
 		req.SetHeaders(map[string]string{
 			"Authorization":         xc.GetToken(),
