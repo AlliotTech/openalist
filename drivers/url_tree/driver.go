@@ -3,9 +3,12 @@ package url_tree
 import (
 	"context"
 	"errors"
+	"fmt"
+	"net/url"
 	stdpath "path"
 	"strings"
 	"sync"
+	"text/template"
 
 	"github.com/AlliotTech/openalist/internal/driver"
 	"github.com/AlliotTech/openalist/internal/errs"
@@ -18,8 +21,9 @@ import (
 type Urls struct {
 	model.Storage
 	Addition
-	root  *Node
-	mutex sync.RWMutex
+	root               *Node
+	mutex              sync.RWMutex
+	downloadParamsTmpl *template.Template
 }
 
 func (d *Urls) Config() driver.Config {
@@ -37,6 +41,14 @@ func (d *Urls) Init(ctx context.Context) error {
 	}
 	node.calSize()
 	d.root = node
+	d.downloadParamsTmpl = nil
+	if params := strings.TrimSpace(d.DownloadParams); params != "" {
+		tmpl, err := template.New("downloadParams").Parse(params)
+		if err != nil {
+			return fmt.Errorf("failed to parse download_params: %w", err)
+		}
+		d.downloadParamsTmpl = tmpl
+	}
 	return nil
 }
 
@@ -76,11 +88,64 @@ func (d *Urls) Link(ctx context.Context, file model.Obj, args model.LinkArgs) (*
 		return nil, errs.ObjectNotFound
 	}
 	if node.isFile() {
+		downloadURL := node.Url
+		if args.Type != "preview" && d.downloadParamsTmpl != nil {
+			var err error
+			downloadURL, err = d.buildDownloadURL(node, file.GetPath())
+			if err != nil {
+				return nil, err
+			}
+		}
 		return &model.Link{
-			URL: node.Url,
+			URL: downloadURL,
 		}, nil
 	}
 	return nil, errs.NotFile
+}
+
+func (d *Urls) buildDownloadURL(node *Node, path string) (string, error) {
+	var rendered strings.Builder
+	err := d.downloadParamsTmpl.Execute(&rendered, map[string]interface{}{
+		"Name":     url.QueryEscape(node.Name),
+		"Path":     url.QueryEscape(path),
+		"Size":     node.Size,
+		"Modified": node.Modified,
+	})
+	if err != nil {
+		return "", fmt.Errorf("failed to render download_params: %w", err)
+	}
+	params := strings.TrimPrefix(strings.TrimSpace(rendered.String()), "?")
+	if params == "" {
+		return node.Url, nil
+	}
+	query, err := url.ParseQuery(params)
+	if err != nil {
+		return "", fmt.Errorf("invalid download_params %q: %w", params, err)
+	}
+	return appendQuery(node.Url, query)
+}
+
+func appendQuery(rawURL string, query url.Values) (string, error) {
+	encoded := query.Encode()
+	if encoded == "" {
+		return rawURL, nil
+	}
+	if _, err := url.ParseRequestURI(rawURL); err != nil {
+		return "", err
+	}
+	base, fragment, hasFragment := strings.Cut(rawURL, "#")
+	separator := "?"
+	if strings.Contains(base, "?") {
+		separator = "&"
+	}
+	if strings.HasSuffix(base, "?") || strings.HasSuffix(base, "&") {
+		separator = ""
+	}
+	result := base + separator + encoded
+	if hasFragment {
+		result += "#" + fragment
+	}
+	return result, nil
 }
 
 func (d *Urls) MakeDir(ctx context.Context, parentDir model.Obj, dirName string) (model.Obj, error) {
