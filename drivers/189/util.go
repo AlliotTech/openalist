@@ -11,9 +11,11 @@ import (
 	"io"
 	"math"
 	"net/http"
+	"path"
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/AlliotTech/openalist/drivers/base"
 	"github.com/AlliotTech/openalist/internal/driver"
@@ -26,6 +28,27 @@ import (
 )
 
 // do others that not defined in Driver interface
+
+func (d *Cloud189) sanitizeName(name string) string {
+	if !d.StripEmoji {
+		return name
+	}
+	var b strings.Builder
+	for _, r := range name {
+		if utf8.RuneLen(r) != 4 {
+			b.WriteRune(r)
+		}
+	}
+	sanitized := b.String()
+	ext := path.Ext(name)
+	if sanitized == "" || sanitized == ext {
+		if ext != "" {
+			return "file" + ext
+		}
+		return "file"
+	}
+	return sanitized
+}
 
 //func (d *Cloud189) login() error {
 //	url := "https://cloud.189.cn/api/portal/loginUrl.action?redirectURL=https%3A%2F%2Fcloud.189.cn%2Fmain.action"
@@ -223,12 +246,13 @@ func (d *Cloud189) getFiles(fileId string) ([]model.Obj, error) {
 }
 
 func (d *Cloud189) oldUpload(dstDir model.Obj, file model.FileStreamer) error {
+	safeName := d.sanitizeName(file.GetName())
 	res, err := d.client.R().SetMultipartFormData(map[string]string{
 		"parentId":   dstDir.GetID(),
 		"sessionKey": "??",
 		"opertype":   "1",
-		"fname":      file.GetName(),
-	}).SetMultipartField("Filedata", file.GetName(), file.GetMimetype(), file).Post("https://hb02.upload.cloud.189.cn/v1/DCIWebUploadAction")
+		"fname":      safeName,
+	}).SetMultipartField("Filedata", safeName, file.GetMimetype(), file).Post("https://hb02.upload.cloud.189.cn/v1/DCIWebUploadAction")
 	if err != nil {
 		return err
 	}
@@ -312,10 +336,11 @@ func (d *Cloud189) newUpload(ctx context.Context, dstDir model.Obj, file model.F
 	d.sessionKey = sessionKey
 	const DEFAULT int64 = 10485760
 	var count = int64(math.Ceil(float64(file.GetSize()) / float64(DEFAULT)))
+	safeName := d.sanitizeName(file.GetName())
 
 	res, err := d.uploadRequest("/person/initMultiUpload", map[string]string{
 		"parentFolderId": dstDir.GetID(),
-		"fileName":       encode(file.GetName()),
+		"fileName":       encode(safeName),
 		"fileSize":       strconv.FormatInt(file.GetSize(), 10),
 		"sliceSize":      strconv.FormatInt(DEFAULT, 10),
 		"lazyCheck":      "1",
