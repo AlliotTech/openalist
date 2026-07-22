@@ -23,10 +23,12 @@ func decode(str string, encoding string) string {
 }
 
 type Addition struct {
-	Address  string `json:"address" required:"true"`
-	Encoding string `json:"encoding" required:"true"`
-	Username string `json:"username" required:"true"`
-	Password string `json:"password" required:"true"`
+	Address               string `json:"address" required:"true"`
+	Encoding              string `json:"encoding" required:"false"`
+	Username              string `json:"username" required:"true"`
+	Password              string `json:"password" required:"true"`
+	TLSMode               string `json:"tls_mode" type:"select" options:"None,Explicit,Implicit" default:"None" help:"Explicit enables STARTTLS on the control connection; Implicit starts TLS immediately."`
+	TLSInsecureSkipVerify bool   `json:"tls_insecure_skip_verify" default:"false" help:"Allow insecure TLS connections with untrusted certificates."`
 	driver.RootPath
 }
 

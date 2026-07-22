@@ -25,18 +25,19 @@ func (d *FTP) GetAddition() driver.Additional {
 }
 
 func (d *FTP) Init(ctx context.Context) error {
-	return d.login()
+	return d.login(ctx)
 }
 
 func (d *FTP) Drop(ctx context.Context) error {
 	if d.conn != nil {
-		_ = d.conn.Logout()
+		_ = d.conn.Quit()
+		d.conn = nil
 	}
 	return nil
 }
 
 func (d *FTP) List(ctx context.Context, dir model.Obj, args model.ListArgs) ([]model.Obj, error) {
-	if err := d.login(); err != nil {
+	if err := d.login(ctx); err != nil {
 		return nil, err
 	}
 	entries, err := d.conn.List(encode(dir.GetPath(), d.Encoding))
@@ -60,7 +61,7 @@ func (d *FTP) List(ctx context.Context, dir model.Obj, args model.ListArgs) ([]m
 }
 
 func (d *FTP) Link(ctx context.Context, file model.Obj, args model.LinkArgs) (*model.Link, error) {
-	if err := d.login(); err != nil {
+	if err := d.login(ctx); err != nil {
 		return nil, err
 	}
 
@@ -72,14 +73,14 @@ func (d *FTP) Link(ctx context.Context, file model.Obj, args model.LinkArgs) (*m
 }
 
 func (d *FTP) MakeDir(ctx context.Context, parentDir model.Obj, dirName string) error {
-	if err := d.login(); err != nil {
+	if err := d.login(ctx); err != nil {
 		return err
 	}
 	return d.conn.MakeDir(encode(stdpath.Join(parentDir.GetPath(), dirName), d.Encoding))
 }
 
 func (d *FTP) Move(ctx context.Context, srcObj, dstDir model.Obj) error {
-	if err := d.login(); err != nil {
+	if err := d.login(ctx); err != nil {
 		return err
 	}
 	return d.conn.Rename(
@@ -89,7 +90,7 @@ func (d *FTP) Move(ctx context.Context, srcObj, dstDir model.Obj) error {
 }
 
 func (d *FTP) Rename(ctx context.Context, srcObj model.Obj, newName string) error {
-	if err := d.login(); err != nil {
+	if err := d.login(ctx); err != nil {
 		return err
 	}
 	return d.conn.Rename(
@@ -103,7 +104,7 @@ func (d *FTP) Copy(ctx context.Context, srcObj, dstDir model.Obj) error {
 }
 
 func (d *FTP) Remove(ctx context.Context, obj model.Obj) error {
-	if err := d.login(); err != nil {
+	if err := d.login(ctx); err != nil {
 		return err
 	}
 	path := encode(obj.GetPath(), d.Encoding)
@@ -115,7 +116,7 @@ func (d *FTP) Remove(ctx context.Context, obj model.Obj) error {
 }
 
 func (d *FTP) Put(ctx context.Context, dstDir model.Obj, s model.FileStreamer, up driver.UpdateProgress) error {
-	if err := d.login(); err != nil {
+	if err := d.login(ctx); err != nil {
 		return err
 	}
 	path := stdpath.Join(dstDir.GetPath(), s.GetName())

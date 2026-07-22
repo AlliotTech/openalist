@@ -1,8 +1,12 @@
 package ftp
 
 import (
+	"context"
+	"crypto/tls"
 	"io"
+	"net"
 	"os"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -12,23 +16,45 @@ import (
 
 // do others that not defined in Driver interface
 
-func (d *FTP) login() error {
+func (d *FTP) login(ctx context.Context) error {
 	if d.conn != nil {
 		_, err := d.conn.CurrentDir()
 		if err == nil {
 			return nil
 		}
+		_ = d.conn.Quit()
+		d.conn = nil
 	}
-	conn, err := ftp.Dial(d.Address, ftp.DialWithShutTimeout(10*time.Second))
+	opts := []ftp.DialOption{
+		ftp.DialWithShutTimeout(10 * time.Second),
+		ftp.DialWithContext(ctx),
+	}
+	if tlsMode := strings.ToLower(strings.TrimSpace(d.TLSMode)); tlsMode == "explicit" || tlsMode == "implicit" {
+		tlsConfig := &tls.Config{ServerName: ftpServerName(d.Address), InsecureSkipVerify: d.TLSInsecureSkipVerify}
+		if tlsMode == "implicit" {
+			opts = append(opts, ftp.DialWithTLS(tlsConfig))
+		} else {
+			opts = append(opts, ftp.DialWithExplicitTLS(tlsConfig))
+		}
+	}
+	conn, err := ftp.Dial(d.Address, opts...)
 	if err != nil {
 		return err
 	}
 	err = conn.Login(d.Username, d.Password)
 	if err != nil {
+		_ = conn.Quit()
 		return err
 	}
 	d.conn = conn
 	return nil
+}
+
+func ftpServerName(address string) string {
+	if host, _, err := net.SplitHostPort(address); err == nil {
+		return host
+	}
+	return address
 }
 
 // FileReader An FTP file reader that implements io.MFile for seeking.
@@ -51,20 +77,25 @@ func NewFileReader(conn *ftp.ServerConn, path string, size int64) *FileReader {
 }
 
 func (r *FileReader) Read(buf []byte) (n int, err error) {
-	n, err = r.ReadAt(buf, r.offset.Load())
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	off := r.offset.Load()
+	n, err = r.readAtLocked(buf, off)
 	r.offset.Add(int64(n))
 	return
 }
 
 func (r *FileReader) ReadAt(buf []byte, off int64) (n int, err error) {
 	if off < 0 {
-		return -1, os.ErrInvalid
+		return 0, os.ErrInvalid
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	return r.readAtLocked(buf, off)
+}
 
-	if off != r.readAtOffset {
-		//have to restart the connection, to correct offset
+func (r *FileReader) readAtLocked(buf []byte, off int64) (n int, err error) {
+	if r.resp != nil && off != r.readAtOffset {
 		_ = r.resp.Close()
 		r.resp = nil
 	}
@@ -91,7 +122,7 @@ func (r *FileReader) Seek(offset int64, whence int) (int64, error) {
 	case io.SeekCurrent:
 		newOffset = oldOffset + offset
 	case io.SeekEnd:
-		return r.size, nil
+		newOffset = r.size + offset
 	default:
 		return -1, os.ErrInvalid
 	}
@@ -109,8 +140,12 @@ func (r *FileReader) Seek(offset int64, whence int) (int64, error) {
 }
 
 func (r *FileReader) Close() error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	if r.resp != nil {
-		return r.resp.Close()
+		err := r.resp.Close()
+		r.resp = nil
+		return err
 	}
 	return nil
 }
