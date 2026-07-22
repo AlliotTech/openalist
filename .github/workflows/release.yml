@@ -1,8 +1,9 @@
 name: release
 
 on:
-  release:
-    types: [ published ]
+  push:
+    tags:
+      - "v*"
 
 jobs:
   prepare_release:
@@ -12,13 +13,6 @@ jobs:
       web_version: ${{ steps.web.outputs.version }}
       built_at: ${{ steps.metadata.outputs.built_at }}
     steps:
-      - name: Prerelease
-        uses: irongut/EditRelease@v1.2.0
-        with:
-          token: ${{ secrets.MY_TOKEN }}
-          id: ${{ github.event.release.id }}
-          prerelease: true
-
       - name: Resolve frontend version
         id: web
         run: |

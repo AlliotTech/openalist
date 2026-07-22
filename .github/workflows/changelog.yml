@@ -49,6 +49,7 @@ jobs:
           fi
 
       - name: Create GitHub release
-        run: npx --yes changelogithub@13.16.1
+        run: gh release create "$TAG_NAME" --generate-notes --verify-tag --title "$TAG_NAME"
         env:
-          GITHUB_TOKEN: ${{ secrets.MY_TOKEN }}
+          GH_TOKEN: ${{ secrets.MY_TOKEN }}
+          TAG_NAME: ${{ github.ref_name }}
