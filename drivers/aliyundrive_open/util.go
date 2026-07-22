@@ -101,6 +101,20 @@ func (d *AliyundriveOpen) request(uri, method string, callback base.ReqCallback,
 	return b, err
 }
 
+func (d *AliyundriveOpen) requestWithLimiter(ctx context.Context, typ limiterType, uri, method string, callback base.ReqCallback, retry ...bool) ([]byte, error) {
+	if err := d.wait(ctx, typ); err != nil {
+		return nil, err
+	}
+	return d.request(uri, method, callback, retry...)
+}
+
+func (d *AliyundriveOpen) requestReturnErrRespWithLimiter(ctx context.Context, typ limiterType, uri, method string, callback base.ReqCallback, retry ...bool) ([]byte, error, *ErrResp) {
+	if err := d.wait(ctx, typ); err != nil {
+		return nil, err, nil
+	}
+	return d.requestReturnErrResp(uri, method, callback, retry...)
+}
+
 func (d *AliyundriveOpen) requestReturnErrResp(uri, method string, callback base.ReqCallback, retry ...bool) ([]byte, error, *ErrResp) {
 	req := base.RestyClient.R()
 	// TODO check whether access_token is expired
@@ -135,6 +149,9 @@ func (d *AliyundriveOpen) requestReturnErrResp(uri, method string, callback base
 }
 
 func (d *AliyundriveOpen) list(ctx context.Context, data base.Json) (*Files, error) {
+	if err := d.wait(ctx, limiterList); err != nil {
+		return nil, err
+	}
 	var resp Files
 	_, err := d.request("/adrive/v1.0/openFile/list", http.MethodPost, func(req *resty.Request) {
 		req.SetBody(data).SetResult(&resp)
@@ -165,7 +182,7 @@ func (d *AliyundriveOpen) getFiles(ctx context.Context, fileId string) ([]File, 
 			//"video_thumbnail_width": 480,
 			//"image_thumbnail_width": 480,
 		}
-		resp, err := d.limitList(ctx, data)
+		resp, err := d.list(ctx, data)
 		if err != nil {
 			return nil, err
 		}

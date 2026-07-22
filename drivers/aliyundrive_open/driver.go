@@ -3,12 +3,10 @@ package aliyundrive_open
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
 	"path/filepath"
 	"time"
 
-	"github.com/Xhofe/rateg"
 	"github.com/AlliotTech/openalist/drivers/base"
 	"github.com/AlliotTech/openalist/internal/driver"
 	"github.com/AlliotTech/openalist/internal/errs"
@@ -24,9 +22,8 @@ type AliyundriveOpen struct {
 
 	DriveId string
 
-	limitList func(ctx context.Context, data base.Json) (*Files, error)
-	limitLink func(ctx context.Context, file model.Obj) (*model.Link, error)
-	ref       *AliyundriveOpen
+	limiter *limiter
+	ref     *AliyundriveOpen
 }
 
 func (d *AliyundriveOpen) Config() driver.Config {
@@ -38,25 +35,26 @@ func (d *AliyundriveOpen) GetAddition() driver.Additional {
 }
 
 func (d *AliyundriveOpen) Init(ctx context.Context) error {
+	if d.limiter != nil {
+		d.limiter.free()
+	}
+	d.limiter = getLimiterForUser(globalLimiterUserID)
 	if d.LIVPDownloadFormat == "" {
 		d.LIVPDownloadFormat = "jpeg"
 	}
 	if d.DriveType == "" {
 		d.DriveType = "default"
 	}
-	res, err := d.request("/adrive/v1.0/user/getDriveInfo", http.MethodPost, nil)
+	res, err := d.requestWithLimiter(ctx, limiterOther, "/adrive/v1.0/user/getDriveInfo", http.MethodPost, nil)
 	if err != nil {
+		d.limiter.free()
+		d.limiter = nil
 		return err
 	}
 	d.DriveId = utils.Json.Get(res, d.DriveType+"_drive_id").ToString()
-	d.limitList = rateg.LimitFnCtx(d.list, rateg.LimitFnOption{
-		Limit:  4,
-		Bucket: 1,
-	})
-	d.limitLink = rateg.LimitFnCtx(d.link, rateg.LimitFnOption{
-		Limit:  1,
-		Bucket: 1,
-	})
+	userID := utils.Json.Get(res, "user_id").ToString()
+	d.limiter.free()
+	d.limiter = getLimiterForUser(userID)
 	return nil
 }
 
@@ -70,6 +68,8 @@ func (d *AliyundriveOpen) InitReference(storage driver.Driver) error {
 }
 
 func (d *AliyundriveOpen) Drop(ctx context.Context) error {
+	d.limiter.free()
+	d.limiter = nil
 	d.ref = nil
 	return nil
 }
@@ -87,9 +87,6 @@ func (d *AliyundriveOpen) GetRoot(ctx context.Context) (model.Obj, error) {
 }
 
 func (d *AliyundriveOpen) List(ctx context.Context, dir model.Obj, args model.ListArgs) ([]model.Obj, error) {
-	if d.limitList == nil {
-		return nil, fmt.Errorf("driver not init")
-	}
 	files, err := d.getFiles(ctx, dir.GetID())
 	if err != nil {
 		return nil, err
@@ -107,7 +104,10 @@ func (d *AliyundriveOpen) List(ctx context.Context, dir model.Obj, args model.Li
 	return objs, err
 }
 
-func (d *AliyundriveOpen) link(ctx context.Context, file model.Obj) (*model.Link, error) {
+func (d *AliyundriveOpen) Link(ctx context.Context, file model.Obj, args model.LinkArgs) (*model.Link, error) {
+	if err := d.wait(ctx, limiterLink); err != nil {
+		return nil, err
+	}
 	res, err := d.request("/adrive/v1.0/openFile/getDownloadUrl", http.MethodPost, func(req *resty.Request) {
 		req.SetBody(base.Json{
 			"drive_id":   d.DriveId,
@@ -131,18 +131,10 @@ func (d *AliyundriveOpen) link(ctx context.Context, file model.Obj) (*model.Link
 		Expiration: &exp,
 	}, nil
 }
-
-func (d *AliyundriveOpen) Link(ctx context.Context, file model.Obj, args model.LinkArgs) (*model.Link, error) {
-	if d.limitLink == nil {
-		return nil, fmt.Errorf("driver not init")
-	}
-	return d.limitLink(ctx, file)
-}
-
 func (d *AliyundriveOpen) MakeDir(ctx context.Context, parentDir model.Obj, dirName string) (model.Obj, error) {
 	nowTime, _ := getNowTime()
 	newDir := File{CreatedAt: nowTime, UpdatedAt: nowTime}
-	_, err := d.request("/adrive/v1.0/openFile/create", http.MethodPost, func(req *resty.Request) {
+	_, err := d.requestWithLimiter(ctx, limiterOther, "/adrive/v1.0/openFile/create", http.MethodPost, func(req *resty.Request) {
 		req.SetBody(base.Json{
 			"drive_id":        d.DriveId,
 			"parent_file_id":  parentDir.GetID(),
@@ -168,7 +160,7 @@ func (d *AliyundriveOpen) MakeDir(ctx context.Context, parentDir model.Obj, dirN
 
 func (d *AliyundriveOpen) Move(ctx context.Context, srcObj, dstDir model.Obj) (model.Obj, error) {
 	var resp MoveOrCopyResp
-	_, err := d.request("/adrive/v1.0/openFile/move", http.MethodPost, func(req *resty.Request) {
+	_, err := d.requestWithLimiter(ctx, limiterOther, "/adrive/v1.0/openFile/move", http.MethodPost, func(req *resty.Request) {
 		req.SetBody(base.Json{
 			"drive_id":          d.DriveId,
 			"file_id":           srcObj.GetID(),
@@ -198,7 +190,7 @@ func (d *AliyundriveOpen) Move(ctx context.Context, srcObj, dstDir model.Obj) (m
 
 func (d *AliyundriveOpen) Rename(ctx context.Context, srcObj model.Obj, newName string) (model.Obj, error) {
 	var newFile File
-	_, err := d.request("/adrive/v1.0/openFile/update", http.MethodPost, func(req *resty.Request) {
+	_, err := d.requestWithLimiter(ctx, limiterOther, "/adrive/v1.0/openFile/update", http.MethodPost, func(req *resty.Request) {
 		req.SetBody(base.Json{
 			"drive_id": d.DriveId,
 			"file_id":  srcObj.GetID(),
@@ -230,7 +222,7 @@ func (d *AliyundriveOpen) Rename(ctx context.Context, srcObj model.Obj, newName 
 
 func (d *AliyundriveOpen) Copy(ctx context.Context, srcObj, dstDir model.Obj) error {
 	var resp MoveOrCopyResp
-	_, err := d.request("/adrive/v1.0/openFile/copy", http.MethodPost, func(req *resty.Request) {
+	_, err := d.requestWithLimiter(ctx, limiterOther, "/adrive/v1.0/openFile/copy", http.MethodPost, func(req *resty.Request) {
 		req.SetBody(base.Json{
 			"drive_id":          d.DriveId,
 			"file_id":           srcObj.GetID(),
@@ -256,7 +248,7 @@ func (d *AliyundriveOpen) Remove(ctx context.Context, obj model.Obj) error {
 	if d.RemoveWay == "delete" {
 		uri = "/adrive/v1.0/openFile/delete"
 	}
-	_, err := d.request(uri, http.MethodPost, func(req *resty.Request) {
+	_, err := d.requestWithLimiter(ctx, limiterOther, uri, http.MethodPost, func(req *resty.Request) {
 		req.SetBody(base.Json{
 			"drive_id": d.DriveId,
 			"file_id":  obj.GetID(),
@@ -295,7 +287,7 @@ func (d *AliyundriveOpen) Other(ctx context.Context, args model.OtherArgs) (inte
 	default:
 		return nil, errs.NotSupport
 	}
-	_, err := d.request(uri, http.MethodPost, func(req *resty.Request) {
+	_, err := d.requestWithLimiter(ctx, limiterOther, uri, http.MethodPost, func(req *resty.Request) {
 		req.SetBody(data).SetResult(&resp)
 	})
 	if err != nil {
