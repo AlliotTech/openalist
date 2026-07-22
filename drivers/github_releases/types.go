@@ -2,12 +2,96 @@ package github_releases
 
 import (
 	"encoding/json"
+	"path"
 	"strings"
 	"time"
 
 	"github.com/AlliotTech/openalist/pkg/utils"
 	"github.com/go-resty/resty/v2"
 )
+
+func releaseToFiles(point string, release *Release) []File {
+	if release == nil {
+		return nil
+	}
+	files := make([]File, 0, len(release.Assets))
+	for _, asset := range release.Assets {
+		files = append(files, File{Path: path.Join(point, asset.Name), FileName: asset.Name, Size: asset.Size, Type: "file", UpdateAt: asset.UpdatedAt, CreateAt: asset.CreatedAt, Url: asset.BrowserDownloadUrl})
+	}
+	return files
+}
+
+func releaseSize(release *Release) int64 {
+	if release == nil {
+		return 0
+	}
+	var size int64
+	for _, asset := range release.Assets {
+		size += asset.Size
+	}
+	return size
+}
+
+func releasesToVersionDirs(point string, releases []Release) []File {
+	files := make([]File, 0, len(releases))
+	for _, release := range releases {
+		files = append(files, File{Path: path.Join(point, release.TagName), FileName: release.TagName, Size: releaseSize(&release), Type: "dir", UpdateAt: release.PublishedAt, CreateAt: release.CreatedAt, Url: release.HtmlUrl})
+	}
+	return files
+}
+
+func releaseAssetsByTag(point, tagName string, releases []Release) []File {
+	for _, release := range releases {
+		if release.TagName != tagName {
+			continue
+		}
+		files := make([]File, 0, len(release.Assets))
+		for _, asset := range release.Assets {
+			files = append(files, File{Path: path.Join(point, tagName, asset.Name), FileName: asset.Name, Size: asset.Size, Type: "file", UpdateAt: asset.UpdatedAt, CreateAt: asset.CreatedAt, Url: asset.BrowserDownloadUrl})
+		}
+		return files
+	}
+	return nil
+}
+
+func releasesTotalSize(releases []Release) int64 {
+	var size int64
+	for i := range releases {
+		size += releaseSize(&releases[i])
+	}
+	return size
+}
+
+func sourceCodeFiles(point string, release *Release) []File {
+	if release == nil {
+		return nil
+	}
+	return []File{
+		{Path: path.Join(point, "Source code (zip)"), FileName: "Source code (zip)", Size: 1, Type: "file", UpdateAt: release.CreatedAt, CreateAt: release.CreatedAt, Url: release.ZipballUrl},
+		{Path: path.Join(point, "Source code (tar.gz)"), FileName: "Source code (tar.gz)", Size: 1, Type: "file", UpdateAt: release.CreatedAt, CreateAt: release.CreatedAt, Url: release.TarballUrl},
+	}
+}
+
+func sourceCodeFilesByTag(point string, releases []Release, tagName string) []File {
+	for i := range releases {
+		if releases[i].TagName == tagName {
+			return sourceCodeFiles(point, &releases[i])
+		}
+	}
+	return nil
+}
+
+func otherFiles(point string, fileInfos []FileInfo) []File {
+	const defaultTime = "1970-01-01T00:00:00Z"
+	files := make([]File, 0)
+	for _, info := range fileInfos {
+		if info.Type == "dir" || !(strings.EqualFold(info.Name, "README.md") || strings.HasPrefix(info.Name, "LICENSE")) {
+			continue
+		}
+		files = append(files, File{Path: path.Join(point, info.Name), FileName: info.Name, Size: info.Size, Type: "file", UpdateAt: defaultTime, CreateAt: defaultTime, Url: info.DownloadUrl})
+	}
+	return files
+}
 
 type MountPoint struct {
 	Point     string      // 挂载点

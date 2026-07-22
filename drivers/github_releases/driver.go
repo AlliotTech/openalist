@@ -4,12 +4,14 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	stdpath "path"
 	"strings"
 
 	"github.com/AlliotTech/openalist/internal/driver"
 	"github.com/AlliotTech/openalist/internal/errs"
 	"github.com/AlliotTech/openalist/internal/model"
 	"github.com/AlliotTech/openalist/pkg/utils"
+	log "github.com/sirupsen/logrus"
 )
 
 type GithubReleases struct {
@@ -43,15 +45,40 @@ func (d *GithubReleases) List(ctx context.Context, dir model.Obj, args model.Lis
 	for i := range d.points {
 		point := &d.points[i]
 
-		if !d.Addition.ShowAllVersion { // latest
-			point.RequestRelease(d.GetRequest, args.Refresh)
-
-			if point.Point == path { // 与仓库路径相同
-				files = append(files, point.GetLatestRelease()...)
-				if d.Addition.ShowReadme {
-					files = append(files, point.GetOtherFile(d.GetRequest, args.Refresh)...)
+		if !d.Addition.ShowAllVersion {
+			var release *Release
+			if !args.Refresh && point.Release != nil {
+				release = point.Release
+			} else {
+				var err error
+				release, err = d.getLatestRelease(point.Repo)
+				if err != nil {
+					log.Warnf("failed to request release for %s: %v", point.Repo, err)
+					continue
 				}
-			} else if strings.HasPrefix(point.Point, path) { // 仓库目录的父目录
+				point.Release = release
+			}
+			if release == nil {
+				continue
+			}
+			if point.Point == path {
+				files = append(files, releaseToFiles(point.Point, release)...)
+				if d.Addition.ShowReadme {
+					var other []FileInfo
+					if !args.Refresh && point.OtherFile != nil {
+						other = *point.OtherFile
+					} else if fetched, err := d.fetchRepoFiles(point.Repo); err == nil {
+						other = fetched
+						point.OtherFile = &other
+					} else {
+						log.Warnf("failed to get other files for %s: %v", point.Repo, err)
+					}
+					files = append(files, otherFiles(point.Point, other)...)
+				}
+				if d.Addition.ShowSourceCode {
+					files = append(files, sourceCodeFiles(point.Point, release)...)
+				}
+			} else if strings.HasPrefix(point.Point, path) {
 				nextDir := GetNextDir(point.Point, path)
 				if nextDir == "" {
 					continue
@@ -61,31 +88,61 @@ func (d *GithubReleases) List(ctx context.Context, dir model.Obj, args model.Lis
 				for index := range files {
 					if files[index].GetName() == nextDir {
 						hasSameDir = true
-						files[index].Size += point.GetLatestSize()
+						files[index].Size += releaseSize(release)
 						break
 					}
 				}
 				if !hasSameDir {
 					files = append(files, File{
-						Path:     path + "/" + nextDir,
+						Path:     stdpath.Join(path, nextDir),
 						FileName: nextDir,
-						Size:     point.GetLatestSize(),
-						UpdateAt: point.Release.PublishedAt,
-						CreateAt: point.Release.CreatedAt,
+						Size:     releaseSize(release),
+						UpdateAt: release.PublishedAt,
+						CreateAt: release.CreatedAt,
 						Type:     "dir",
 						Url:      "",
 					})
 				}
 			}
-		} else { // all version
-			point.RequestReleases(d.GetRequest, args.Refresh)
-
-			if point.Point == path { // 与仓库路径相同
-				files = append(files, point.GetAllVersion()...)
-				if d.Addition.ShowReadme {
-					files = append(files, point.GetOtherFile(d.GetRequest, args.Refresh)...)
+		} else {
+			var releases []Release
+			if !args.Refresh && point.Releases != nil {
+				releases = *point.Releases
+			} else {
+				var err error
+				releases, err = d.getAllReleases(point.Repo)
+				if err != nil {
+					log.Warnf("failed to request releases for %s: %v", point.Repo, err)
+					continue
 				}
-			} else if strings.HasPrefix(point.Point, path) { // 仓库目录的父目录
+				point.Releases = &releases
+			}
+			if len(releases) == 0 {
+				if point.Point == path && d.Addition.ShowReadme {
+					var other []FileInfo
+					if !args.Refresh && point.OtherFile != nil {
+						other = *point.OtherFile
+					} else if fetched, err := d.fetchRepoFiles(point.Repo); err == nil {
+						other = fetched
+						point.OtherFile = &other
+					}
+					files = append(files, otherFiles(point.Point, other)...)
+				}
+				continue
+			}
+			if point.Point == path {
+				files = append(files, releasesToVersionDirs(point.Point, releases)...)
+				if d.Addition.ShowReadme {
+					var other []FileInfo
+					if !args.Refresh && point.OtherFile != nil {
+						other = *point.OtherFile
+					} else if fetched, err := d.fetchRepoFiles(point.Repo); err == nil {
+						other = fetched
+						point.OtherFile = &other
+					}
+					files = append(files, otherFiles(point.Point, other)...)
+				}
+			} else if strings.HasPrefix(point.Point, path) {
 				nextDir := GetNextDir(point.Point, path)
 				if nextDir == "" {
 					continue
@@ -95,28 +152,31 @@ func (d *GithubReleases) List(ctx context.Context, dir model.Obj, args model.Lis
 				for index := range files {
 					if files[index].GetName() == nextDir {
 						hasSameDir = true
-						files[index].Size += point.GetAllVersionSize()
+						files[index].Size += releasesTotalSize(releases)
 						break
 					}
 				}
 				if !hasSameDir {
 					files = append(files, File{
 						FileName: nextDir,
-						Path:     path + "/" + nextDir,
-						Size:     point.GetAllVersionSize(),
-						UpdateAt: (*point.Releases)[0].PublishedAt,
-						CreateAt: (*point.Releases)[0].CreatedAt,
+						Path:     stdpath.Join(path, nextDir),
+						Size:     releasesTotalSize(releases),
+						UpdateAt: releases[0].PublishedAt,
+						CreateAt: releases[0].CreatedAt,
 						Type:     "dir",
 						Url:      "",
 					})
 				}
-			} else if strings.HasPrefix(path, point.Point) { // 仓库目录的子目录
+			} else if strings.HasPrefix(path, point.Point) {
 				tagName := GetNextDir(path, point.Point)
 				if tagName == "" {
 					continue
 				}
 
-				files = append(files, point.GetReleaseByTagName(tagName)...)
+				files = append(files, releaseAssetsByTag(point.Point, tagName, releases)...)
+				if d.Addition.ShowSourceCode {
+					files = append(files, sourceCodeFilesByTag(point.Point, releases, tagName)...)
+				}
 			}
 		}
 	}

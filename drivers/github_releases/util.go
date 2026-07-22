@@ -1,13 +1,13 @@
 package github_releases
 
 import (
+	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"strings"
 
 	"github.com/AlliotTech/openalist/drivers/base"
 	"github.com/go-resty/resty/v2"
-	log "github.com/sirupsen/logrus"
 )
 
 // 发送 GET 请求
@@ -23,9 +23,66 @@ func (d *GithubReleases) GetRequest(url string) (*resty.Response, error) {
 		return nil, err
 	}
 	if res.StatusCode() != 200 {
-		log.Warn("failed to get request: ", res.StatusCode(), res.String())
+		return nil, fmt.Errorf("github api error: status %d", res.StatusCode())
 	}
 	return res, nil
+}
+
+func (d *GithubReleases) getLatestRelease(repo string) (*Release, error) {
+	resp, err := d.GetRequest("https://api.github.com/repos/" + repo + "/releases/latest")
+	if err != nil {
+		return nil, err
+	}
+	release := new(Release)
+	if err := json.Unmarshal(resp.Body(), release); err != nil {
+		return nil, err
+	}
+	return release, nil
+}
+
+func (d *GithubReleases) getAllReleases(repo string) ([]Release, error) {
+	perPage := d.Addition.PerPage
+	if perPage < 1 {
+		perPage = 30
+	} else if perPage > 100 {
+		perPage = 100
+	}
+	maxPage := d.Addition.MaxPage
+	if maxPage < 0 {
+		maxPage = 0
+	}
+	all := make([]Release, 0)
+	for page := 1; ; page++ {
+		url := fmt.Sprintf("https://api.github.com/repos/%s/releases?per_page=%d&page=%d", repo, perPage, page)
+		resp, err := d.GetRequest(url)
+		if err != nil {
+			return nil, err
+		}
+		var releases []Release
+		if err := json.Unmarshal(resp.Body(), &releases); err != nil {
+			return nil, err
+		}
+		if len(releases) == 0 {
+			break
+		}
+		all = append(all, releases...)
+		if (maxPage > 0 && page >= maxPage) || len(releases) < perPage {
+			break
+		}
+	}
+	return all, nil
+}
+
+func (d *GithubReleases) fetchRepoFiles(repo string) ([]FileInfo, error) {
+	resp, err := d.GetRequest("https://api.github.com/repos/" + repo + "/contents")
+	if err != nil {
+		return nil, err
+	}
+	var files []FileInfo
+	if err := json.Unmarshal(resp.Body(), &files); err != nil {
+		return nil, err
+	}
+	return files, nil
 }
 
 // 解析挂载结构
@@ -77,7 +134,7 @@ func GetNextDir(wholePath string, basePath string) string {
 	return ""
 }
 
-// 判断当前目录是否是目标目录的祖先目录
+// IsAncestorDir reports whether parentDir is an ancestor of targetDir.
 func IsAncestorDir(parentDir string, targetDir string) bool {
 	absTargetDir, _ := filepath.Abs(targetDir)
 	absParentDir, _ := filepath.Abs(parentDir)
