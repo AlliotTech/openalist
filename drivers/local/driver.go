@@ -330,6 +330,9 @@ func (d *Local) Remove(ctx context.Context, obj model.Obj) error {
 	if err != nil {
 		return err
 	}
+	if !obj.IsDir() {
+		d.removeThumbCache(obj.GetPath())
+	}
 	return nil
 }
 
