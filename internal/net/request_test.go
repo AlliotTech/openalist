@@ -62,6 +62,10 @@ func TestDownloadOrder(t *testing.T) {
 	if exp, a := int(length), len(resultBuf); exp != a {
 		t.Errorf("expect  buffer length=%d, got %d", exp, a)
 	}
+	expected := buff[start : start+length]
+	if !bytes.Equal(expected, resultBuf) {
+		t.Errorf("downloaded bytes = %v, want %v", resultBuf, expected)
+	}
 	chunkSize := int(length)/partSize + 1
 	if int(length)%partSize == 0 {
 		chunkSize--
@@ -70,7 +74,10 @@ func TestDownloadOrder(t *testing.T) {
 		t.Errorf("expect %v API calls, got %v", e, a)
 	}
 
-	expectRngs := []string{"2-3", "5-3", "8-3", "11-1"}
+	// The downloader puts the remainder in the first chunk so that the
+	// following chunks have a stable PartSize. For a ten-byte range and a
+	// three-byte part size that yields 1, 3, 3, 3 byte requests.
+	expectRngs := []string{"2-1", "3-3", "6-3", "9-3"}
 	for _, rng := range expectRngs {
 		if !slices.Contains(*ranges, rng) {
 			t.Errorf("expect range %v, but absent in return", rng)

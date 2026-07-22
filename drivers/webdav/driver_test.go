@@ -61,6 +61,52 @@ func TestResolveWebDAVRedirectKeepsCredentialsSameOrigin(t *testing.T) {
 	}
 }
 
+func TestResolveWebDAVRedirectKeepsOriginalLinkOnSuccess(t *testing.T) {
+	initNoRedirectClientForTest()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("Authorization"); got != "Basic secret" {
+			t.Errorf("request Authorization = %q, want %q", got, "Basic secret")
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	header := http.Header{
+		"Authorization": {"Basic secret"},
+		"X-Download":    {"original"},
+	}
+	gotURL, gotHeader, err := resolveWebDAVRedirect(context.Background(), server.URL+"/file", header)
+	if err != nil {
+		t.Fatalf("resolveWebDAVRedirect returned error: %v", err)
+	}
+	if gotURL != server.URL+"/file" {
+		t.Fatalf("URL = %q, want original URL %q", gotURL, server.URL+"/file")
+	}
+	if gotHeader.Get("Authorization") != "Basic secret" || gotHeader.Get("X-Download") != "original" {
+		t.Fatalf("headers = %#v, want original headers", gotHeader)
+	}
+}
+
+func TestResolveWebDAVRedirectKeepsOriginalLinkOnPartialContent(t *testing.T) {
+	initNoRedirectClientForTest()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusPartialContent)
+	}))
+	defer server.Close()
+
+	header := http.Header{"Range": {"bytes=0-99"}}
+	gotURL, gotHeader, err := resolveWebDAVRedirect(context.Background(), server.URL+"/file", header)
+	if err != nil {
+		t.Fatalf("resolveWebDAVRedirect returned error: %v", err)
+	}
+	if gotURL != server.URL+"/file" {
+		t.Fatalf("URL = %q, want original URL %q", gotURL, server.URL+"/file")
+	}
+	if gotHeader.Get("Range") != "bytes=0-99" {
+		t.Fatalf("Range header = %q, want original value", gotHeader.Get("Range"))
+	}
+}
+
 func initNoRedirectClientForTest() {
 	base.NoRedirectClient = resty.New().SetRedirectPolicy(resty.RedirectPolicyFunc(func(req *http.Request, via []*http.Request) error {
 		return http.ErrUseLastResponse

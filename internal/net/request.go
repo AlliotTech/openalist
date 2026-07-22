@@ -191,10 +191,14 @@ func (d *downloader) download() (io.ReadCloser, error) {
 	d.concurrency = d.cfg.Concurrency
 	d.sendChunkTask(true)
 
-	var rc io.ReadCloser = NewMultiReadCloser(d.bufs[0], d.interrupt, d.finishBuf)
+	d.m.Lock()
+	firstBuf := d.bufs[0]
+	initialErr := d.err
+	d.m.Unlock()
+	var rc io.ReadCloser = NewMultiReadCloser(firstBuf, d.interrupt, d.finishBuf)
 
 	// Return error
-	return rc, d.err
+	return rc, initialErr
 }
 
 func (d *downloader) sendChunkTask(newConcurrency bool) error {

@@ -120,18 +120,7 @@ func (b *s3Backend) HeadObject(ctx context.Context, bucketName, objectName strin
 	size := node.GetSize()
 	// hash := getFileHashByte(fobj)
 
-	meta := map[string]string{
-		"Last-Modified":      node.ModTime().Format(timeFormat),
-		"Content-Disposition": utils.GenerateContentDisposition(path.Base(objectName)),
-		"Content-Type":       utils.GetMimeType(fp),
-	}
-
-	if val, ok := b.meta.Load(fp); ok {
-		metaMap := val.(map[string]string)
-		for k, v := range metaMap {
-			meta[k] = v
-		}
-	}
+	meta := b.objectMetadata(fp, node.ModTime())
 
 	return &gofakes3.Object{
 		Name: objectName,
@@ -213,18 +202,7 @@ func (b *s3Backend) GetObject(ctx context.Context, bucketName, objectName string
 		}
 	}
 
-	meta := map[string]string{
-		"Last-Modified":      node.ModTime().Format(timeFormat),
-		"Content-Disposition": utils.GenerateContentDisposition(file.GetName()),
-		"Content-Type":       utils.GetMimeType(fp),
-	}
-
-	if val, ok := b.meta.Load(fp); ok {
-		metaMap := val.(map[string]string)
-		for k, v := range metaMap {
-			meta[k] = v
-		}
-	}
+	meta := b.objectMetadata(fp, node.ModTime())
 
 	return &gofakes3.Object{
 		// Name: gofakes3.URLEncode(objectName),
@@ -235,6 +213,19 @@ func (b *s3Backend) GetObject(ctx context.Context, bucketName, objectName string
 		Range:    rnge,
 		Contents: rdr,
 	}, nil
+}
+
+func (b *s3Backend) objectMetadata(fp string, modified time.Time) map[string]string {
+	metadata := map[string]string{
+		"Last-Modified": modified.Format(timeFormat),
+		"Content-Type":  utils.GetMimeType(fp),
+	}
+	if val, ok := b.meta.Load(fp); ok {
+		for key, value := range val.(map[string]string) {
+			metadata[key] = value
+		}
+	}
+	return metadata
 }
 
 // TouchObject creates or updates meta on specified object.

@@ -284,6 +284,7 @@ func NewHttpClient() *http.Client {
 		Proxy:           http.ProxyFromEnvironment,
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: conf.Conf.TlsInsecureSkipVerify},
 	}
+	transport.DialContext = safeDialContext
 	return &http.Client{
 		Timeout:   time.Hour * 48,
 		Transport: &safeTransport{base: transport},
@@ -295,20 +296,47 @@ type safeTransport struct {
 }
 
 func (t *safeTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	host := req.URL.Hostname()
-	addresses, err := gonet.DefaultResolver.LookupIPAddr(req.Context(), host)
+	if ip := gonet.ParseIP(req.URL.Hostname()); ip != nil && isCloudMetadataIP(ip) {
+		return nil, ErrCloudMetadataEndpoint
+	}
+	return t.base.RoundTrip(req)
+}
+
+// safeDialContext resolves the address immediately before dialing and blocks
+// cloud metadata endpoints. This runs only for the address actually dialed;
+// when an HTTP proxy is configured, that address is the proxy, so target
+// hostnames remain resolvable by the proxy itself.
+func safeDialContext(ctx context.Context, network, address string) (gonet.Conn, error) {
+	host, port, err := gonet.SplitHostPort(address)
+	if err != nil {
+		return nil, err
+	}
+	addresses, err := gonet.DefaultResolver.LookupIPAddr(ctx, host)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to resolve host: %s", host)
 	}
 	if len(addresses) == 0 {
 		return nil, fmt.Errorf("failed to resolve host %s: no addresses found", host)
 	}
-	for _, address := range addresses {
-		if isCloudMetadataIP(address.IP) {
+	// Match net/http's default transport dial settings while pinning the
+	// connection to the IP address that passed the metadata check.
+	dialer := &gonet.Dialer{
+		Timeout:   30 * time.Second,
+		KeepAlive: 30 * time.Second,
+	}
+	var lastErr error
+	for _, resolved := range addresses {
+		if isCloudMetadataIP(resolved.IP) {
 			return nil, ErrCloudMetadataEndpoint
 		}
+		resolvedAddress := gonet.JoinHostPort(resolved.IP.String(), port)
+		conn, dialErr := dialer.DialContext(ctx, network, resolvedAddress)
+		if dialErr == nil {
+			return conn, nil
+		}
+		lastErr = dialErr
 	}
-	return t.base.RoundTrip(req)
+	return nil, lastErr
 }
 
 var ErrCloudMetadataEndpoint = errors.New("access to cloud metadata endpoint is not allowed")

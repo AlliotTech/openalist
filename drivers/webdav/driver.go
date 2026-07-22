@@ -94,6 +94,9 @@ func resolveWebDAVRedirect(ctx context.Context, rawURL string, header http.Heade
 	if res.RawResponse != nil && res.RawResponse.Body != nil {
 		defer res.RawResponse.Body.Close()
 	}
+	if res.StatusCode() >= http.StatusOK && res.StatusCode() < http.StatusMultipleChoices {
+		return rawURL, header.Clone(), nil
+	}
 	switch res.StatusCode() {
 	case http.StatusMovedPermanently, http.StatusFound, http.StatusSeeOther, http.StatusTemporaryRedirect, http.StatusPermanentRedirect:
 	default:

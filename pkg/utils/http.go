@@ -2,27 +2,30 @@ package utils
 
 import (
 	"fmt"
-	"net/url"
 	"strings"
+	"unicode"
 )
 
 // GenerateContentDisposition 生成符合RFC 5987标准的Content-Disposition头部
 func GenerateContentDisposition(filename string) string {
-	// 按照RFC 2047进行编码，用于filename部分
-	encodedName := urlEncode(filename)
+	filename = sanitizeContentDispositionFilename(filename)
+	quotedName := strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(filename)
 
 	// 按照RFC 5987进行编码，用于filename*部分
 	encodedNameRFC5987 := encodeRFC5987(filename)
 
 	return fmt.Sprintf("attachment; filename=\"%s\"; filename*=utf-8''%s",
-		encodedName, encodedNameRFC5987)
+		quotedName, encodedNameRFC5987)
 }
 
-// urlEncode URL编码函数，适用于文件名编码
-func urlEncode(s string) string {
-	s = url.QueryEscape(s)
-	s = strings.ReplaceAll(s, "+", "%20")
-	return s
+func sanitizeContentDispositionFilename(filename string) string {
+	filename = strings.ToValidUTF8(filename, "�")
+	return strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return '_'
+		}
+		return r
+	}, filename)
 }
 
 // encodeRFC5987 按照RFC 5987规范编码字符串，适用于HTTP头部参数中的非ASCII字符
@@ -41,4 +44,4 @@ func encodeRFC5987(s string) string {
 		}
 	}
 	return buf.String()
-} 
+}
