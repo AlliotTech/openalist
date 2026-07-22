@@ -10,6 +10,8 @@ import (
 	"os"
 	stdpath "path"
 	"strconv"
+	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/sync/semaphore"
@@ -20,6 +22,7 @@ import (
 	"github.com/AlliotTech/openalist/internal/errs"
 	"github.com/AlliotTech/openalist/internal/model"
 	"github.com/AlliotTech/openalist/pkg/errgroup"
+	"github.com/AlliotTech/openalist/pkg/singleflight"
 	"github.com/AlliotTech/openalist/pkg/utils"
 	"github.com/avast/retry-go"
 	log "github.com/sirupsen/logrus"
@@ -31,6 +34,11 @@ type BaiduNetdisk struct {
 
 	uploadThread int
 	vipType      int // 会员类型，0普通用户(4G/4M)、1普通会员(10G/16M)、2超级会员(20G/32M)
+
+	uploadURLG          singleflight.Group[string]
+	uploadURLMu         sync.RWMutex
+	uploadURL           string
+	uploadURLUpdateTime time.Time
 }
 
 func (d *BaiduNetdisk) Config() driver.Config {
@@ -43,18 +51,20 @@ func (d *BaiduNetdisk) GetAddition() driver.Additional {
 
 func (d *BaiduNetdisk) Init(ctx context.Context) error {
 	d.uploadThread, _ = strconv.Atoi(d.UploadThread)
-	if d.uploadThread < 1 || d.uploadThread > 32 {
-		d.uploadThread, d.UploadThread = 3, "3"
+	if d.uploadThread < 1 {
+		d.uploadThread, d.UploadThread = 1, "1"
+	} else if d.uploadThread > 32 {
+		d.uploadThread, d.UploadThread = 32, "32"
 	}
 
 	if _, err := url.Parse(d.UploadAPI); d.UploadAPI == "" || err != nil {
-		d.UploadAPI = "https://d.pcs.baidu.com"
+		d.UploadAPI = UPLOAD_FALLBACK_API
 	}
 
 	res, err := d.get("/xpan/nas", map[string]string{
 		"method": "uinfo",
 	}, nil)
-	log.Debugf("[baidu] get uinfo: %s", string(res))
+	log.Debugf("[baidu_netdisk] get uinfo: %s", string(res))
 	if err != nil {
 		return err
 	}
@@ -259,84 +269,104 @@ func (d *BaiduNetdisk) Put(ctx context.Context, dstDir model.Obj, stream model.F
 	mtime := stream.ModTime().Unix()
 	ctime := stream.CreateTime().Unix()
 
-	// step.1 预上传
-	// 尝试获取之前的进度
+	// step.1 尝试获取之前的进度
 	precreateResp, ok := base.GetUploadProgress[*PrecreateResp](d, d.AccessToken, contentMd5)
 	if !ok {
-		params := map[string]string{
-			"method": "precreate",
-		}
-		form := map[string]string{
-			"path":        path,
-			"size":        strconv.FormatInt(streamSize, 10),
-			"isdir":       "0",
-			"autoinit":    "1",
-			"rtype":       "3",
-			"block_list":  blockListStr,
-			"content-md5": contentMd5,
-			"slice-md5":   sliceMd5,
-		}
-		joinTime(form, ctime, mtime)
-
-		log.Debugf("[baidu_netdisk] precreate data: %s", form)
-		_, err = d.postForm("/xpan/file", params, form, &precreateResp)
+		precreateResp, err = d.precreate(path, streamSize, blockListStr, contentMd5, sliceMd5, ctime, mtime)
 		if err != nil {
 			return nil, err
 		}
-		log.Debugf("%+v", precreateResp)
 		if precreateResp.ReturnType == 2 {
 			//rapid upload, since got md5 match from baidu server
-			// 修复时间，具体原因见 Put 方法注释的 **注意**
-			precreateResp.File.Ctime = ctime
-			precreateResp.File.Mtime = mtime
 			return fileToObj(precreateResp.File), nil
 		}
 	}
+
 	// step.2 上传分片
-	threadG, upCtx := errgroup.NewGroupWithContext(ctx, d.uploadThread,
-		retry.Attempts(1),
-		retry.Delay(time.Second),
-		retry.DelayType(retry.BackOffDelay))
-	sem := semaphore.NewWeighted(3)
-	for i, partseq := range precreateResp.BlockList {
-		if utils.IsCanceled(upCtx) {
-			break
+	uploadComplete := false
+uploadLoop:
+	for attempt := 0; attempt < 2; attempt++ {
+		uploadURL := d.getUploadURL(path, precreateResp.Uploadid)
+		threadG, upCtx := errgroup.NewGroupWithContext(ctx, d.uploadThread,
+			retry.Attempts(UPLOAD_RETRY_COUNT),
+			retry.Delay(UPLOAD_RETRY_WAIT_TIME),
+			retry.MaxDelay(UPLOAD_RETRY_MAX_WAIT_TIME),
+			retry.DelayType(retry.BackOffDelay),
+			retry.RetryIf(func(err error) bool {
+				return !errors.Is(err, ErrUploadIDExpired)
+			}),
+			retry.LastErrorOnly(true))
+		sem := semaphore.NewWeighted(3)
+		var progressMu sync.Mutex
+		totalParts := len(precreateResp.BlockList)
+
+		for i, partseq := range precreateResp.BlockList {
+			if utils.IsCanceled(upCtx) || partseq < 0 {
+				continue
+			}
+			i, partseq := i, partseq
+			offset, partSize := int64(partseq)*sliceSize, sliceSize
+			if partseq+1 == count {
+				partSize = lastBlockSize
+			}
+			threadG.Go(func(ctx context.Context) error {
+				if err := sem.Acquire(ctx, 1); err != nil {
+					return err
+				}
+				defer sem.Release(1)
+				section := io.NewSectionReader(cache, offset, partSize)
+				params := map[string]string{
+					"method":       "upload",
+					"access_token": d.AccessToken,
+					"type":         "tmpfile",
+					"path":         path,
+					"uploadid":     precreateResp.Uploadid,
+					"partseq":      strconv.Itoa(partseq),
+				}
+				if _, err := section.Seek(0, io.SeekStart); err != nil {
+					return err
+				}
+				err := d.uploadSlice(ctx, uploadURL, params, stream.GetName(), driver.NewLimitedUploadStream(ctx, section))
+				if err != nil {
+					return err
+				}
+				progressMu.Lock()
+				precreateResp.BlockList[i] = -1
+				succeeded := threadG.Success() + 1
+				progressMu.Unlock()
+				up(float64(succeeded) * 100 / float64(totalParts))
+				return nil
+			})
 		}
 
-		i, partseq, offset, byteSize := i, partseq, int64(partseq)*sliceSize, sliceSize
-		if partseq+1 == count {
-			byteSize = lastBlockSize
+		err = threadG.Wait()
+		if err == nil {
+			uploadComplete = true
+			break uploadLoop
 		}
-		threadG.Go(func(ctx context.Context) error {
-			if err = sem.Acquire(ctx, 1); err != nil {
-				return err
-			}
-			defer sem.Release(1)
-			params := map[string]string{
-				"method":       "upload",
-				"access_token": d.AccessToken,
-				"type":         "tmpfile",
-				"path":         path,
-				"uploadid":     precreateResp.Uploadid,
-				"partseq":      strconv.Itoa(partseq),
-			}
-			err := d.uploadSlice(ctx, params, stream.GetName(),
-				driver.NewLimitedUploadStream(ctx, io.NewSectionReader(cache, offset, byteSize)))
-			if err != nil {
-				return err
-			}
-			up(float64(threadG.Success()) * 100 / float64(len(precreateResp.BlockList)))
-			precreateResp.BlockList[i] = -1
-			return nil
-		})
-	}
-	if err = threadG.Wait(); err != nil {
-		// 如果属于用户主动取消，则保存上传进度
+
+		precreateResp.BlockList = utils.SliceFilter(precreateResp.BlockList, func(s int) bool { return s >= 0 })
+		base.SaveUploadProgress(d, precreateResp, d.AccessToken, contentMd5)
 		if errors.Is(err, context.Canceled) {
-			precreateResp.BlockList = utils.SliceFilter(precreateResp.BlockList, func(s int) bool { return s >= 0 })
+			return nil, err
+		}
+		if errors.Is(err, ErrUploadIDExpired) {
+			log.Warn("[baidu_netdisk] uploadid expired, restarting upload")
+			d.invalidateUploadURL()
+			precreateResp, err = d.precreate(path, streamSize, blockListStr, "", "", ctime, mtime)
+			if err != nil {
+				return nil, err
+			}
+			if precreateResp.ReturnType == 2 {
+				return fileToObj(precreateResp.File), nil
+			}
 			base.SaveUploadProgress(d, precreateResp, d.AccessToken, contentMd5)
+			continue uploadLoop
 		}
 		return nil, err
+	}
+	if !uploadComplete {
+		return nil, errs.StreamIncomplete
 	}
 
 	// step.3 创建文件
@@ -348,25 +378,64 @@ func (d *BaiduNetdisk) Put(ctx context.Context, dstDir model.Obj, stream model.F
 	// 修复时间，具体原因见 Put 方法注释的 **注意**
 	newFile.Ctime = ctime
 	newFile.Mtime = mtime
+	base.SaveUploadProgress(d, nil, d.AccessToken, contentMd5)
 	return fileToObj(newFile), nil
 }
 
-func (d *BaiduNetdisk) uploadSlice(ctx context.Context, params map[string]string, fileName string, file io.Reader) error {
+func (d *BaiduNetdisk) precreate(path string, streamSize int64, blockListStr, contentMd5, sliceMd5 string, ctime, mtime int64) (*PrecreateResp, error) {
+	params := map[string]string{"method": "precreate"}
+	form := map[string]string{
+		"path":       path,
+		"size":       strconv.FormatInt(streamSize, 10),
+		"isdir":      "0",
+		"autoinit":   "1",
+		"rtype":      "3",
+		"block_list": blockListStr,
+	}
+	if contentMd5 != "" && sliceMd5 != "" {
+		form["content-md5"] = contentMd5
+		form["slice-md5"] = sliceMd5
+	}
+	joinTime(form, ctime, mtime)
+	log.Debugf("[baidu_netdisk] precreate data: %s", form)
+
+	var resp PrecreateResp
+	_, err := d.postForm("/xpan/file", params, form, &resp)
+	if err != nil {
+		return nil, err
+	}
+	if resp.ReturnType == 2 {
+		resp.File.Ctime = ctime
+		resp.File.Mtime = mtime
+	}
+	return &resp, nil
+}
+
+func (d *BaiduNetdisk) uploadSlice(ctx context.Context, uploadURL string, params map[string]string, fileName string, file io.Reader) error {
 	res, err := base.RestyClient.R().
 		SetContext(ctx).
 		SetQueryParams(params).
 		SetFileReader("file", fileName, file).
-		Post(d.UploadAPI + "/rest/2.0/pcs/superfile2")
+		Post(strings.TrimRight(uploadURL, "/") + "/rest/2.0/pcs/superfile2")
 	if err != nil {
 		return err
 	}
 	log.Debugln(res.RawResponse.Status + res.String())
 	errCode := utils.Json.Get(res.Body(), "error_code").ToInt()
 	errNo := utils.Json.Get(res.Body(), "errno").ToInt()
+	if isUploadIDExpiredResponse(res.String()) {
+		return ErrUploadIDExpired
+	}
 	if errCode != 0 || errNo != 0 {
-		return errs.NewErr(errs.StreamIncomplete, "error in uploading to baidu, will retry. response=%s", res.String())
+		return errs.NewErr(errs.StreamIncomplete, "error uploading to baidu, response=%s", res.String())
 	}
 	return nil
+}
+
+func isUploadIDExpiredResponse(response string) bool {
+	response = strings.ToLower(response)
+	return strings.Contains(response, "uploadid") &&
+		(strings.Contains(response, "invalid") || strings.Contains(response, "expired") || strings.Contains(response, "not found"))
 }
 
 var _ driver.Driver = (*BaiduNetdisk)(nil)

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -339,6 +340,90 @@ func (d *BaiduNetdisk) getSliceSize(filesize int64) int64 {
 	}
 
 	return maxSliceSize
+}
+
+func (d *BaiduNetdisk) getUploadURL(path, uploadID string) string {
+	if !d.UseDynamicUploadAPI || uploadID == "" {
+		return d.UploadAPI
+	}
+
+	getCached := func() string {
+		d.uploadURLMu.RLock()
+		defer d.uploadURLMu.RUnlock()
+		if d.uploadURL != "" && time.Since(d.uploadURLUpdateTime) < UPLOAD_URL_EXPIRE_TIME {
+			return d.uploadURL
+		}
+		return ""
+	}
+	if uploadURL := getCached(); uploadURL != "" {
+		return uploadURL
+	}
+
+	uploadURL, err, _ := d.uploadURLG.Do("upload", func() (string, error) {
+		if cached := getCached(); cached != "" {
+			return cached, nil
+		}
+		resolved, err := d.requestUploadURL(path, uploadID)
+		if err != nil {
+			return "", err
+		}
+		d.uploadURLMu.Lock()
+		d.uploadURL = resolved
+		d.uploadURLUpdateTime = time.Now()
+		d.uploadURLMu.Unlock()
+		return resolved, nil
+	})
+	if err != nil {
+		log.Warnf("[baidu_netdisk] resolve upload URL failed (%v), using fallback: %s", err, d.UploadAPI)
+		return d.UploadAPI
+	}
+	return uploadURL
+}
+
+func (d *BaiduNetdisk) invalidateUploadURL() {
+	d.uploadURLMu.Lock()
+	d.uploadURL = ""
+	d.uploadURLUpdateTime = time.Time{}
+	d.uploadURLMu.Unlock()
+}
+
+func (d *BaiduNetdisk) requestUploadURL(path, uploadID string) (string, error) {
+	params := map[string]string{
+		"method":         "locateupload",
+		"appid":          "250528",
+		"path":           path,
+		"uploadid":       uploadID,
+		"upload_version": "2.0",
+	}
+	var resp UploadServerResp
+	_, err := d.request("https://d.pcs.baidu.com/rest/2.0/pcs/file", http.MethodGet, func(req *resty.Request) {
+		req.SetQueryParams(params)
+	}, &resp)
+	if err != nil {
+		return "", err
+	}
+	return selectUploadURL(resp)
+}
+
+func selectUploadURL(resp UploadServerResp) (string, error) {
+	var uploadURL string
+	if len(resp.Servers) > 0 {
+		uploadURL = resp.Servers[0].Server
+	} else if len(resp.BakServers) > 0 {
+		uploadURL = resp.BakServers[0].Server
+	}
+	uploadURL = strings.TrimRight(uploadURL, "/")
+	if uploadURL == "" {
+		return "", errors.New("upload URL is empty")
+	}
+	parsed, err := url.ParseRequestURI(uploadURL)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return "", fmt.Errorf("invalid upload URL: %q", uploadURL)
+	}
+	if parsed.Scheme != "https" && parsed.Scheme != "http" {
+		return "", fmt.Errorf("unsupported upload URL scheme: %s", parsed.Scheme)
+	}
+	return uploadURL, nil
 }
 
 // func encodeURIComponent(str string) string {

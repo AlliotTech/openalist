@@ -1,6 +1,7 @@
 package baidu_netdisk
 
 import (
+	"errors"
 	"path"
 	"strconv"
 	"time"
@@ -8,6 +9,8 @@ import (
 	"github.com/AlliotTech/openalist/internal/model"
 	"github.com/AlliotTech/openalist/pkg/utils"
 )
+
+var ErrUploadIDExpired = errors.New("uploadid expired")
 
 type TokenErrResp struct {
 	ErrorDescription string `json:"error_description"`
@@ -188,4 +191,15 @@ type PrecreateResp struct {
 
 	// return_type=2
 	File File `json:"info"`
+
+	UploadURL string `json:"-"`
+}
+
+type UploadServerResp struct {
+	Servers []struct {
+		Server string `json:"server"`
+	} `json:"servers"`
+	BakServers []struct {
+		Server string `json:"server"`
+	} `json:"bak_servers"`
 }
