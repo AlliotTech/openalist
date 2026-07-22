@@ -34,6 +34,7 @@ func (tm *Manager[K]) do(task *Task[K]) {
 			log.Debugf("task [%s] ended", task.Name)
 		case <-task.Ctx.Done():
 			log.Debugf("task [%s] canceled", task.Name)
+			task.markCanceled()
 			return
 		}
 		// return worker
