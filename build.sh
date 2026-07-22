@@ -19,16 +19,19 @@ beta)
 release)
   git tag -d beta >/dev/null 2>&1 || true
   version=$(git describe --abbrev=0 --tags)
-  webReleaseUrl=$(curl --fail --silent --show-error --location --head --retry 3 \
-    --output /dev/null --write-out '%{url_effective}' \
-    "https://github.com/AlliotTech/openalist-web/releases/latest")
-  webVersion="${webReleaseUrl##*/}"
+  webVersion="${WEB_VERSION:-}"
+  if [[ -z "$webVersion" ]]; then
+    webReleaseUrl=$(curl --fail --silent --show-error --location --head --retry 3 \
+      --output /dev/null --write-out '%{url_effective}' \
+      "https://github.com/AlliotTech/openalist-web/releases/latest")
+    webVersion="${webReleaseUrl##*/}"
+  fi
   if [[ -z "$webVersion" ]]; then
     echo "Failed to resolve the latest frontend version" >&2
     exit 1
   fi
   ;;
-prepare | zip)
+prepare | zip | finalize)
   ;;
 *)
   echo "Parameter error" >&2
@@ -37,7 +40,7 @@ prepare | zip)
 esac
 
 if [[ "$mode" == "dev" || "$mode" == "beta" || "$mode" == "release" ]]; then
-  builtAt="$(date +'%F %T %z')"
+  builtAt="${BUILT_AT:-$(date +'%F %T %z')}"
   gitAuthor="Xhofe <i@nn.ci>"
   gitCommit=$(git log --pretty=format:"%h" -1)
 
@@ -66,7 +69,7 @@ FetchWebDev() {
 
 FetchWebRelease() {
   curl --fail --location --retry 3 \
-    https://github.com/AlliotTech/openalist-web/releases/latest/download/dist.tar.gz \
+    "https://github.com/AlliotTech/openalist-web/releases/download/${webVersion}/dist.tar.gz" \
     --output dist.tar.gz
   tar -zxvf dist.tar.gz
   rm -rf public/dist
@@ -185,6 +188,54 @@ BuildRelease() {
   cp ./alist-windows-amd64.exe ./alist-windows-amd64-upx.exe
   upx -9 ./alist-windows-amd64-upx.exe
   mv alist-* build
+}
+
+ReleaseXgoTargets() {
+  case "$1" in
+  xgo-linux-core)
+    echo "linux/386,linux/amd64,linux/arm64"
+    ;;
+  xgo-linux-arm)
+    echo "linux/arm-5,linux/arm-6,linux/arm-7"
+    ;;
+  xgo-linux-mips)
+    echo "linux/mips,linux/mipsle,linux/mips64,linux/mips64le"
+    ;;
+  xgo-linux-other)
+    echo "linux/ppc64le,linux/riscv64,linux/s390x"
+    ;;
+  xgo-desktop)
+    echo "darwin/amd64,darwin/arm64,windows/386,windows/amd64"
+    ;;
+  *)
+    echo "Unknown release target group: $1" >&2
+    return 2
+    ;;
+  esac
+}
+
+BuildReleaseXgoGroup() {
+  local group="$1"
+  local targets
+  targets=$(ReleaseXgoTargets "$group")
+
+  rm -rf .git/
+  mkdir -p "build"
+  xgo -targets="$targets" -out "$appName" -ldflags="$ldflags" -tags=jsoniter .
+  mv alist-* build
+
+  if [[ "$group" == "xgo-linux-core" ]]; then
+    upx -9 ./build/alist-linux-amd64
+  elif [[ "$group" == "xgo-desktop" ]]; then
+    cp ./build/alist-windows-amd64.exe ./build/alist-windows-amd64-upx.exe
+    upx -9 ./build/alist-windows-amd64-upx.exe
+  fi
+}
+
+BuildReleaseWindowsArm64() {
+  rm -rf .git/
+  mkdir -p "build"
+  BuildWinArm64 ./build/alist-windows-arm64.exe
 }
 
 BuildReleaseLinuxMusl() {
@@ -309,9 +360,57 @@ MakeRelease() {
     zip "compress/${archive_file}.zip" alist.exe
     rm -f alist.exe
   done < <(find . -type f -name "${appName}-windows-*" -print0)
-  cd compress
-  find . -type f -print0 | xargs -0 md5sum >"$1"
-  cat "$1"
+  if [[ -n "${1:-}" ]]; then
+    cd compress
+    find . -type f -print0 | xargs -0 md5sum >"$1"
+    cat "$1"
+    cd ..
+  fi
+  cd ..
+}
+
+FinalizeRelease() {
+  local expected=(
+    alist-darwin-amd64.tar.gz
+    alist-darwin-arm64.tar.gz
+    alist-linux-386.tar.gz
+    alist-linux-amd64.tar.gz
+    alist-linux-arm-5.tar.gz
+    alist-linux-arm-6.tar.gz
+    alist-linux-arm-7.tar.gz
+    alist-linux-arm64.tar.gz
+    alist-linux-mips.tar.gz
+    alist-linux-mips64.tar.gz
+    alist-linux-mips64le.tar.gz
+    alist-linux-mipsle.tar.gz
+    alist-linux-ppc64le.tar.gz
+    alist-linux-riscv64.tar.gz
+    alist-linux-s390x.tar.gz
+    alist-windows-386.zip
+    alist-windows-amd64-upx.zip
+    alist-windows-amd64.zip
+    alist-windows-arm64.zip
+  )
+  local archive
+  local -a actual
+
+  shopt -s nullglob
+  actual=(build/compress/alist-*.tar.gz build/compress/alist-*.zip)
+  if [[ "${#actual[@]}" -ne "${#expected[@]}" ]]; then
+    echo "Expected ${#expected[@]} release archives, found ${#actual[@]}" >&2
+    printf 'Found: %s\n' "${actual[@]}" >&2
+    return 1
+  fi
+  for archive in "${expected[@]}"; do
+    if [[ ! -f "build/compress/$archive" ]]; then
+      echo "Missing release archive: $archive" >&2
+      return 1
+    fi
+  done
+
+  cd build/compress
+  find . -type f \( -name '*.tar.gz' -o -name '*.zip' \) -print0 | xargs -0 md5sum >md5.txt
+  cat md5.txt
   cd ../..
 }
 
@@ -348,6 +447,12 @@ elif [[ "$mode" == "release" || "$mode" == "beta" ]]; then
   elif [[ "$target" == "freebsd" ]]; then
     BuildReleaseFreeBSD
     MakeRelease "md5-freebsd.txt"
+  elif [[ "$target" == xgo-* ]]; then
+    BuildReleaseXgoGroup "$target"
+    MakeRelease
+  elif [[ "$target" == "windows_arm64" ]]; then
+    BuildReleaseWindowsArm64
+    MakeRelease
   elif [[ "$target" == "web" ]]; then
     echo "web only"
   else
@@ -363,6 +468,8 @@ elif [[ "$mode" == "prepare" ]]; then
   fi
 elif [[ "$mode" == "zip" && -n "$target" ]]; then
   MakeRelease "${target}.txt"
+elif [[ "$mode" == "finalize" ]]; then
+  FinalizeRelease
 else
   echo "Parameter error" >&2
   exit 2
