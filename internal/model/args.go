@@ -14,6 +14,9 @@ type ListArgs struct {
 	ReqPath           string
 	S3ShowPlaceholder bool
 	Refresh           bool
+	// NoUpdateIndex skips the object update hook when a wrapper driver lists
+	// its underlying storage, preventing duplicate search entries.
+	NoUpdateIndex bool
 }
 
 type LinkArgs struct {

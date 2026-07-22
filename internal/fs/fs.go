@@ -18,8 +18,9 @@ import (
 // then pass the actual path to the op package
 
 type ListArgs struct {
-	Refresh bool
-	NoLog   bool
+	Refresh       bool
+	NoLog         bool
+	NoUpdateIndex bool
 }
 
 func List(ctx context.Context, path string, args *ListArgs) ([]model.Obj, error) {
