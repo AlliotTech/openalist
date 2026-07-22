@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -75,6 +76,83 @@ const (
 	ThreadsNum                 = 10
 )
 
+const defaultPikPakDomain = "mypikpak.net"
+
+var pikPakDomains = []string{"mypikpak.com", "mypikpak.net", "pikpak.me", "pikpakdrive.com"}
+
+var domainOptionMap = map[string]string{
+	"mypikpak_net":    "mypikpak.net",
+	"mypikpak_com":    "mypikpak.com",
+	"pikpak_me":       "pikpak.me",
+	"pikpakdrive_com": "pikpakdrive.com",
+}
+
+func resolveDomainOption(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	if domain, ok := domainOptionMap[value]; ok {
+		return domain
+	}
+	candidate := value
+	if !strings.Contains(candidate, "://") {
+		candidate = "//" + candidate
+	}
+	if parsed, err := url.Parse(candidate); err == nil && parsed.Host != "" {
+		return strings.Trim(parsed.Host, ".")
+	}
+	return strings.Trim(value, ".")
+}
+
+func (d *PikPak) getAPIDomain() string {
+	if domain := resolveDomainOption(d.CustomAPIDomain); domain != "" {
+		return domain
+	}
+	if domain := resolveDomainOption(d.APIDomain); domain != "" {
+		return domain
+	}
+	return defaultPikPakDomain
+}
+
+func (d *PikPak) getDownloadDomain() string {
+	if domain := resolveDomainOption(d.CustomDownloadDomain); domain != "" && domain != "original" {
+		return domain
+	}
+	if domain := resolveDomainOption(d.DownloadDomain); domain != "" && domain != "original" {
+		return domain
+	}
+	return ""
+}
+
+func (d *PikPak) apiURL(path string) string {
+	return "https://api-drive." + d.getAPIDomain() + path
+}
+
+func (d *PikPak) userURL(path string) string {
+	return "https://user." + d.getAPIDomain() + path
+}
+
+func (d *PikPak) rewriteDownloadURL(rawURL string) string {
+	domain := d.getDownloadDomain()
+	if domain == "" || rawURL == "" {
+		return rawURL
+	}
+	parsed, err := url.Parse(rawURL)
+	if err != nil || parsed.Host == "" {
+		return rawURL
+	}
+	host := strings.ToLower(parsed.Hostname())
+	for _, baseDomain := range pikPakDomains {
+		if host == baseDomain {
+			parsed.Host = domain
+			return parsed.String()
+		}
+		if strings.HasSuffix(host, "."+baseDomain) {
+			parsed.Host = strings.TrimSuffix(host, baseDomain) + domain
+			return parsed.String()
+		}
+	}
+	return rawURL
+}
+
 const (
 	AndroidClientID      = "YNxT9w7GMdWvEOKa"
 	AndroidClientSecret  = "dbw2OtmVEeuUvIptb1Coyg"
@@ -99,7 +177,7 @@ func (d *PikPak) login() error {
 		return errors.New("username or password is empty")
 	}
 
-	url := "https://user.mypikpak.net/v1/auth/signin"
+	url := d.userURL("/v1/auth/signin")
 	// 使用 用户填写的 CaptchaToken —————— (验证后的captcha_token)
 	if d.GetCaptchaToken() == "" {
 		if err := d.RefreshCaptchaTokenInLogin(GetAction(http.MethodPost, url), d.Username); err != nil {
@@ -129,7 +207,7 @@ func (d *PikPak) login() error {
 }
 
 func (d *PikPak) refreshToken(refreshToken string) error {
-	url := "https://user.mypikpak.net/v1/auth/token"
+	url := d.userURL("/v1/auth/token")
 	var e ErrResp
 	res, err := base.RestyClient.SetRetryCount(1).R().SetError(&e).
 		SetHeader("user-agent", "").SetBody(base.Json{
@@ -229,7 +307,7 @@ func (d *PikPak) getFiles(id string) ([]File, error) {
 			"page_token":     pageToken,
 		}
 		var resp Files
-		_, err := d.request("https://api-drive.mypikpak.net/drive/v1/files", http.MethodGet, func(req *resty.Request) {
+		_, err := d.request(d.apiURL("/drive/v1/files"), http.MethodGet, func(req *resty.Request) {
 			req.SetQueryParams(query)
 		}, &resp)
 		if err != nil {
@@ -394,7 +472,7 @@ func (d *PikPak) refreshCaptchaToken(action string, metas map[string]string) err
 	}
 	var e ErrResp
 	var resp CaptchaTokenResponse
-	_, err := d.request("https://user.mypikpak.net/v1/shield/captcha/init", http.MethodPost, func(req *resty.Request) {
+	_, err := d.request(d.userURL("/v1/shield/captcha/init"), http.MethodPost, func(req *resty.Request) {
 		req.SetError(&e).SetBody(param).SetQueryParam("client_id", d.ClientID)
 	}, &resp)
 
