@@ -6,11 +6,12 @@ import (
 )
 
 type Addition struct {
-	Address    string `json:"address" required:"true"`
-	Username   string `json:"username" required:"true"`
-	PrivateKey string `json:"private_key" type:"text"`
-	Password   string `json:"password"`
-	Passphrase string `json:"passphrase"`
+	Address        string `json:"address" required:"true"`
+	Username       string `json:"username" required:"true"`
+	PrivateKey     string `json:"private_key" type:"text"`
+	Password       string `json:"password"`
+	Passphrase     string `json:"passphrase"`
+	ConnectTimeout int    `json:"connect_timeout" type:"number" default:"10" help:"SSH connection timeout in seconds"`
 	driver.RootPath
 	IgnoreSymlinkError bool `json:"ignore_symlink_error" default:"false" info:"Ignore symlink error"`
 }

@@ -2,6 +2,7 @@ package sftp
 
 import (
 	"path"
+	"time"
 
 	"github.com/pkg/sftp"
 	log "github.com/sirupsen/logrus"
@@ -31,6 +32,7 @@ func (d *SFTP) initClient() error {
 		User:            d.Username,
 		Auth:            []ssh.AuthMethod{auth},
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+		Timeout:         d.connectTimeout(),
 	}
 	conn, err := ssh.Dial("tcp", d.Address, config)
 	if err != nil {
@@ -52,9 +54,18 @@ func (d *SFTP) clientReconnectOnConnectionError() error {
 		return nil
 	}
 	log.Debugf("[sftp] discarding closed sftp connection: %v", err)
-	_ = d.client.Close()
+	if d.client != nil {
+		_ = d.client.Close()
+	}
 	err = d.initClient()
 	return err
+}
+
+func (d *SFTP) connectTimeout() time.Duration {
+	if d.ConnectTimeout <= 0 {
+		return 10 * time.Second
+	}
+	return time.Duration(d.ConnectTimeout) * time.Second
 }
 
 func (d *SFTP) remove(remotePath string) error {
