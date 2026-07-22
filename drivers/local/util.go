@@ -38,8 +38,36 @@ func isSymlinkDir(f fs.FileInfo, path string) bool {
 	return false
 }
 
+// sanitizeFilePath validates a path before passing it to ffmpeg or ffprobe.
+// The external tools receive the path as a command-line argument, so requiring
+// an absolute regular file and rejecting line/NUL controls provides a defensive
+// boundary without rejecting valid filenames containing shell metacharacters.
+func sanitizeFilePath(path string) (string, error) {
+	if strings.ContainsAny(path, "\n\r\x00") {
+		return "", fmt.Errorf("file path contains invalid characters")
+	}
+	cleaned := filepath.Clean(path)
+	if !filepath.IsAbs(cleaned) {
+		return "", fmt.Errorf("file path must be absolute: %s", path)
+	}
+	info, err := os.Stat(cleaned)
+	if err != nil {
+		return "", fmt.Errorf("file path is not accessible: %w", err)
+	}
+	if !info.Mode().IsRegular() {
+		return "", fmt.Errorf("path is not a regular file: %s", cleaned)
+	}
+	return cleaned, nil
+}
+
 // Get the snapshot of the video
 func (d *Local) GetSnapshot(videoPath string) (imgData *bytes.Buffer, err error) {
+	sanitized, err := sanitizeFilePath(videoPath)
+	if err != nil {
+		return nil, fmt.Errorf("invalid video path: %w", err)
+	}
+	videoPath = sanitized
+
 	// Run ffprobe to get the video duration
 	jsonOutput, err := ffmpeg.Probe(videoPath)
 	if err != nil {
