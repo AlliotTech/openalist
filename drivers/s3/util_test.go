@@ -2,10 +2,13 @@ package s3
 
 import (
 	"context"
+	"net/http"
 	"net/url"
 	"testing"
 
 	"github.com/AlliotTech/openalist/internal/model"
+	"github.com/aws/smithy-go/middleware"
+	smithyhttp "github.com/aws/smithy-go/transport/http"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -53,6 +56,18 @@ func TestCustomObjectURL(t *testing.T) {
 			assert.Equal(t, tt.want, got)
 		})
 	}
+}
+
+func TestWithUserAgent(t *testing.T) {
+	stack := middleware.NewStack("user-agent", smithyhttp.NewStackRequest)
+	require.NoError(t, withUserAgent("client/test")(stack))
+	handler := middleware.DecorateHandler(middleware.HandlerFunc(func(_ context.Context, input interface{}) (interface{}, middleware.Metadata, error) {
+		req := input.(*smithyhttp.Request)
+		assert.Equal(t, "client/test", req.Header.Get("User-Agent"))
+		return nil, middleware.Metadata{}, nil
+	}), stack)
+	_, _, err := handler.Handle(context.Background(), &smithyhttp.Request{Request: &http.Request{Header: make(http.Header)}})
+	require.NoError(t, err)
 }
 
 func TestCustomHostPresign(t *testing.T) {

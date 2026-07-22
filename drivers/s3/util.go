@@ -14,7 +14,10 @@ import (
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	awss3 "github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	smithyendpoints "github.com/aws/smithy-go/endpoints"
+	"github.com/aws/smithy-go/middleware"
+	smithyhttp "github.com/aws/smithy-go/transport/http"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -32,6 +35,9 @@ func (d *S3) initSession(ctx context.Context) error {
 	options := []func(*awsconfig.LoadOptions) error{
 		awsconfig.WithRegion(d.Region),
 		awsconfig.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessKeyID, secretAccessKey, sessionToken)),
+	}
+	if strings.TrimSpace(d.UserAgent) != "" {
+		options = append(options, awsconfig.WithAPIOptions([]func(*middleware.Stack) error{withUserAgent(d.UserAgent)}))
 	}
 	if base.HttpClient != nil {
 		options = append(options, awsconfig.WithHTTPClient(base.HttpClient))
@@ -93,6 +99,20 @@ func normalizeEndpoint(endpoint string) string {
 		return endpoint
 	}
 	return "https://" + endpoint
+}
+
+func withUserAgent(userAgent string) func(*middleware.Stack) error {
+	return func(stack *middleware.Stack) error {
+		if strings.TrimSpace(userAgent) == "" {
+			return nil
+		}
+		return stack.Build.Add(middleware.BuildMiddlewareFunc("s3-custom-user-agent", func(ctx context.Context, in middleware.BuildInput, next middleware.BuildHandler) (middleware.BuildOutput, middleware.Metadata, error) {
+			if req, ok := in.Request.(*smithyhttp.Request); ok {
+				req.Header.Set("User-Agent", userAgent)
+			}
+			return next.HandleBuild(ctx, in)
+		}), middleware.After)
+	}
 }
 
 func (d *S3) customObjectURL(key string) (string, error) {
@@ -248,6 +268,9 @@ func (d *S3) copyFile(ctx context.Context, src string, dst string) error {
 		Bucket:     aws.String(d.Bucket),
 		CopySource: aws.String(url.PathEscape(d.Bucket + "/" + srcKey)),
 		Key:        aws.String(dstKey),
+	}
+	if storageClass := d.resolveStorageClass(); storageClass != "" {
+		input.StorageClass = types.StorageClass(storageClass)
 	}
 	_, err := d.client.CopyObject(ctx, input)
 	return err

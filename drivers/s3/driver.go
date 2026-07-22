@@ -18,6 +18,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	awss3 "github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -174,7 +175,7 @@ func (d *S3) Put(ctx context.Context, dstDir model.Obj, s model.FileStreamer, up
 			uploader.PartSize = s.GetSize()/int64(manager.MaxUploadParts-1) + 1
 		}
 	})
-	_, err := uploader.Upload(ctx, &awss3.PutObjectInput{
+	input := &awss3.PutObjectInput{
 		Bucket: aws.String(d.Bucket),
 		Key:    aws.String(key),
 		Body: driver.NewLimitedUploadStream(ctx, &driver.ReaderUpdatingProgress{
@@ -182,8 +183,41 @@ func (d *S3) Put(ctx context.Context, dstDir model.Obj, s model.FileStreamer, up
 			UpdateProgress: up,
 		}),
 		ContentType: aws.String(s.GetMimetype()),
-	})
+	}
+	if storageClass := d.resolveStorageClass(); storageClass != "" {
+		input.StorageClass = types.StorageClass(storageClass)
+	}
+	_, err := uploader.Upload(ctx, input)
 	return err
 }
 
-var _ driver.Driver = (*S3)(nil)
+func (d *S3) resolveStorageClass() string {
+	value := strings.TrimSpace(strings.ReplaceAll(d.StorageClass, "-", "_"))
+	if value == "" {
+		return ""
+	}
+	if normalized, ok := storageClassLookup[strings.ToLower(value)]; ok {
+		return normalized
+	}
+	return strings.ToUpper(value)
+}
+
+var storageClassLookup = map[string]string{
+	"standard":            "STANDARD",
+	"reduced_redundancy":  "REDUCED_REDUNDANCY",
+	"standard_ia":         "STANDARD_IA",
+	"onezone_ia":          "ONEZONE_IA",
+	"intelligent_tiering": "INTELLIGENT_TIERING",
+	"glacier":             "GLACIER",
+	"glacier_ir":          "GLACIER_IR",
+	"deep_archive":        "DEEP_ARCHIVE",
+	"outposts":            "OUTPOSTS",
+	"snow":                "SNOW",
+	"express_onezone":     "EXPRESS_ONEZONE",
+	"archive":             "ARCHIVE",
+}
+
+var (
+	_ driver.Driver = (*S3)(nil)
+	_ driver.Other  = (*S3)(nil)
+)
