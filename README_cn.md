@@ -90,7 +90,7 @@ Docker 镜像支持 `linux/amd64` 和 `linux/arm64`。仓库也提供了 [docker
 环境要求：
 
 - Git
-- Go 1.25 或更高版本
+- Go 1.27.1 或更高版本
 - SQLite/CGO 所需的 C 编译器
 
 ```bash

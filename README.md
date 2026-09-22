@@ -90,7 +90,7 @@ The default data directory is `./data`, and the default web address is `http://l
 Requirements:
 
 - Git
-- Go 1.25 or later
+- Go 1.27.1 or later
 - A C compiler for SQLite/CGO
 
 ```bash
