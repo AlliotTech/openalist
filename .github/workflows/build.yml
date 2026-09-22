@@ -12,8 +12,12 @@ concurrency:
 
 jobs:
   test:
-    name: Test
+    name: Test (${{ matrix.tags && matrix.tags || 'default' }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        tags: [ '', 'jsoniter' ]
     steps:
 
       - name: Checkout
@@ -28,7 +32,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install --yes libfuse-dev
 
       - name: Test
-        run: go test ./...
+        run: go test -tags="${{ matrix.tags }}" ./...
 
   build:
     needs: test
@@ -56,9 +60,17 @@ jobs:
           go-version-file: go.mod
 
       - name: Setup web
+        if: matrix.group != 'windows-arm64'
         run: bash build.sh dev web
 
+      # go-cross/cgo-actions@v1.1.0 internally runs
+      # `sudo snap install zig --classic --beta` for the windows-arm64 engine,
+      # which currently fails (Snap Store HTTP 502). Preinstalling zig does not
+      # help because the action always re-runs that snap command. Build
+      # windows-arm64 through the existing build.sh path with a pinned,
+      # checksum-verified stable Zig instead.
       - name: Build
+        if: matrix.group != 'windows-arm64'
         uses: go-cross/cgo-actions@v1.1.0
         with:
           targets: ${{ matrix.targets }}
@@ -70,6 +82,31 @@ jobs:
             github.com/AlliotTech/openalist/internal/conf.GitCommit=$git_commit
             github.com/AlliotTech/openalist/internal/conf.Version=$tag
             github.com/AlliotTech/openalist/internal/conf.WebVersion=dev
+
+      - name: Install Zig
+        if: matrix.group == 'windows-arm64'
+        run: bash .github/scripts/install-zig.sh
+
+      - name: Build (windows-arm64)
+        if: matrix.group == 'windows-arm64'
+        run: bash build.sh dev windows_arm64
+
+      # Runner is ubuntu-latest (x86_64) so only the linux-amd64-musl artifact is
+      # natively executable. cgo-actions writes it to build/ using the
+      # musl-target-format above ($os-$musl-$arch -> linux-musl-amd64). Other musl
+      # targets are cross-compiled and only checked for successful build.
+      - name: Smoke test native binary (linux-amd64-musl)
+        if: matrix.group == 'musl'
+        run: |
+          shopt -s nullglob
+          binaries=(build/*-linux-musl-amd64)
+          if [[ ${#binaries[@]} -ne 1 ]]; then
+            echo "Expected one native linux-amd64-musl binary, found ${#binaries[@]}" >&2
+            exit 1
+          fi
+          bin="${binaries[0]}"
+          chmod +x "$bin"
+          "$bin" version
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7.0.1

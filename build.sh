@@ -422,6 +422,9 @@ if [[ "$mode" == "dev" ]]; then
     BuildDockerMultiplatform
   elif [[ "$target" == "web" ]]; then
     echo "web only"
+  elif [[ "$target" == "windows_arm64" ]]; then
+    mkdir -p "build"
+    BuildWinArm64 ./build/alist-windows-arm64.exe
   else
     BuildDev
   fi

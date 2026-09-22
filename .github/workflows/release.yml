@@ -70,7 +70,6 @@ jobs:
 
       - name: Install dependencies
         run: |
-          sudo snap install zig --classic --beta
           docker pull ghcr.io/crazy-max/xgo:latest
           go install github.com/crazy-max/xgo@latest
 
@@ -109,7 +108,7 @@ jobs:
           go-version-file: go.mod
 
       - name: Install Zig
-        run: sudo snap install zig --classic --beta
+        run: bash .github/scripts/install-zig.sh
 
       - name: Build
         run: bash build.sh release windows_arm64
