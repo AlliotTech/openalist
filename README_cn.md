@@ -143,6 +143,7 @@ cd ../openalist
 - 可复现的问题请提交到 [GitHub Issues](https://github.com/AlliotTech/openalist/issues)。
 - 部署和存储配置问题请先查阅[文档站](https://alist.iots.vip/)。
 - 反馈问题时请提供 OpenAList 版本、部署方式、相关日志和复现步骤。
+- 蓝奏云账户登录会自动处理 `acw_sc__v2` 验证。如果初始化仍失败，请提供失败接口及错误信息，不要公开密码或 Cookie。
 
 ## 相关仓库
 
