@@ -1,6 +1,7 @@
 package lanzou
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -8,7 +9,6 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -19,9 +19,6 @@ import (
 	"github.com/go-resty/resty/v2"
 	log "github.com/sirupsen/logrus"
 )
-
-var upClient *resty.Client
-var once sync.Once
 
 func (d *LanZou) doupload(callback base.ReqCallback, resp interface{}) ([]byte, error) {
 	return d.post(d.BaseUrl+"/doupload.php", func(req *resty.Request) {
@@ -40,10 +37,18 @@ func (d *LanZou) get(url string, callback base.ReqCallback) ([]byte, error) {
 }
 
 func (d *LanZou) post(url string, callback base.ReqCallback, resp interface{}) ([]byte, error) {
+	ctx := context.Background()
+	configure := callback
+	callback = func(req *resty.Request) {
+		if configure != nil {
+			configure(req)
+		}
+		ctx = req.Context()
+	}
 	data, err := d._post(url, callback, resp, false)
 	if err == ErrCookieExpiration && d.IsAccount() {
 		if atomic.CompareAndSwapInt32(&d.flag, 0, 1) {
-			_, err2 := d.Login()
+			_, err2 := d.Login(ctx)
 			atomic.SwapInt32(&d.flag, 0)
 			if err2 != nil {
 				err = errors.Join(err, err2)
@@ -53,6 +58,9 @@ func (d *LanZou) post(url string, callback base.ReqCallback, resp interface{}) (
 			}
 		}
 		for atomic.LoadInt32(&d.flag) != 0 {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
 			runtime.Gosched()
 		}
 		return d._post(url, callback, resp, false)
@@ -63,6 +71,9 @@ func (d *LanZou) post(url string, callback base.ReqCallback, resp interface{}) (
 func (d *LanZou) _post(url string, callback base.ReqCallback, resp interface{}, up bool) ([]byte, error) {
 	data, err := d.request(url, http.MethodPost, func(req *resty.Request) {
 		req.AddRetryCondition(func(r *resty.Response, err error) bool {
+			if err != nil || r == nil || isAcwChallenge(r.Body()) {
+				return false
+			}
 			if utils.Json.Get(r.Body(), "zt").ToInt() == 4 {
 				time.Sleep(time.Second)
 				return true
@@ -95,57 +106,46 @@ func (d *LanZou) _post(url string, callback base.ReqCallback, resp interface{}, 
 }
 
 func (d *LanZou) request(url string, method string, callback base.ReqCallback, up bool) ([]byte, error) {
-	var req *resty.Request
-	if up {
-		once.Do(func() {
-			upClient = base.NewRestyClient().SetTimeout(120 * time.Second)
-		})
-		req = upClient.R()
-	} else {
-		req = base.RestyClient.R()
-	}
-
-	req.SetHeaders(map[string]string{
-		"Referer":    "https://pc.woozooo.com",
-		"User-Agent": d.UserAgent,
-	})
-
-	if d.Cookie != "" {
-		req.SetHeader("cookie", d.Cookie)
-	}
-
-	if callback != nil {
-		callback(req)
-	}
-
-	res, err := req.Execute(method, url)
+	res, err := d.execute(d.getClient(up), url, method, callback, up)
 	if err != nil {
 		return nil, err
 	}
 	log.Debugf("lanzou request: url=>%s ,stats=>%d ,body => %s\n", res.Request.URL, res.StatusCode(), res.String())
-	return res.Body(), err
+	return res.Body(), nil
 }
 
-func (d *LanZou) Login() ([]*http.Cookie, error) {
-	resp, err := base.NewRestyClient().SetRedirectPolicy(resty.NoRedirectPolicy()).
-		R().SetFormData(map[string]string{
-		"task":         "3",
-		"uid":          d.Account,
-		"pwd":          d.Password,
-		"setSessionId": "",
-		"setSig":       "",
-		"setScene":     "",
-		"setTocen":     "",
-		"formhash":     "",
-	}).Post("https://up.woozooo.com/mlogin.php")
+func (d *LanZou) Login(ctx context.Context) ([]*http.Cookie, error) {
+	client := d.getClient(false)
+	loginClient := base.NewRestyClient().SetRedirectPolicy(resty.NoRedirectPolicy()).
+		SetTransport(client.GetClient().Transport).SetCookieJar(client.GetClient().Jar)
+	resp, err := d.execute(loginClient, loginURL, http.MethodPost, func(req *resty.Request) {
+		req.SetContext(ctx).SetFormData(map[string]string{
+			"task":         "3",
+			"uid":          d.Account,
+			"pwd":          d.Password,
+			"setSessionId": "",
+			"setSig":       "",
+			"setScene":     "",
+			"setTocen":     "",
+			"formhash":     "",
+		})
+	}, false)
 	if err != nil {
 		return nil, err
 	}
 	if utils.Json.Get(resp.Body(), "zt").ToInt() != 1 {
 		return nil, fmt.Errorf("login err: %s", resp.Body())
 	}
-	d.Cookie = CookieToString(resp.Cookies())
-	return resp.Cookies(), nil
+	cookies := client.GetClient().Jar.Cookies(resp.RawResponse.Request.URL)
+	authCookies := cookies[:0]
+	for _, cookie := range cookies {
+		if cookie.Name != challengeCookie {
+			authCookies = append(authCookies, cookie)
+		}
+	}
+	d.Cookie = CookieToString(authCookies)
+	d.setAccountCookies(authCookies)
+	return authCookies, nil
 }
 
 /*
@@ -269,40 +269,18 @@ var findFileIDReg = regexp.MustCompile(`'/ajaxm\.php\?file=(\d+)'`)
 
 // 获取分享链接主界面
 func (d *LanZou) getShareUrlHtml(shareID string) (string, error) {
-	var vs string
-	for i := 0; i < 3; i++ {
-		firstPageData, err := d.get(fmt.Sprint(d.ShareUrl, "/", shareID),
-			func(req *resty.Request) {
-				if vs != "" {
-					req.SetCookie(&http.Cookie{
-						Name:  "acw_sc__v2",
-						Value: vs,
-					})
-				}
-			})
-		if err != nil {
-			return "", err
-		}
-
-		firstPageDataStr := RemoveNotes(string(firstPageData))
-		if strings.Contains(firstPageDataStr, "取消分享") {
-			return "", ErrFileShareCancel
-		}
-		if strings.Contains(firstPageDataStr, "文件不存在") {
-			return "", ErrFileNotExist
-		}
-
-		// acw_sc__v2
-		if strings.Contains(firstPageDataStr, "acw_sc__v2") {
-			if vs, err = CalcAcwScV2(firstPageDataStr); err != nil {
-				log.Errorf("lanzou: err => acw_sc__v2 validation error  ,data => %s\n", firstPageDataStr)
-				return "", err
-			}
-			continue
-		}
-		return firstPageDataStr, nil
+	data, err := d.get(fmt.Sprint(d.ShareUrl, "/", shareID), nil)
+	if err != nil {
+		return "", err
 	}
-	return "", errors.New("acw_sc__v2 validation error")
+	html := RemoveNotes(string(data))
+	if strings.Contains(html, "取消分享") {
+		return "", ErrFileShareCancel
+	}
+	if strings.Contains(html, "文件不存在") {
+		return "", ErrFileNotExist
+	}
+	return html, nil
 }
 
 // 通过分享链接获取文件或文件夹
@@ -523,10 +501,10 @@ func (d *LanZou) getFileRealInfo(downURL string) (*int64, *time.Time) {
 	return &size, &time
 }
 
-func (d *LanZou) getVeiAndUid() (vei string, uid string, err error) {
+func (d *LanZou) getVeiAndUid(ctx context.Context) (vei string, uid string, err error) {
 	var resp []byte
-	resp, err = d.get("https://pc.woozooo.com/mydisk.php", func(req *resty.Request) {
-		req.SetQueryParams(map[string]string{
+	resp, err = d.get(diskURL, func(req *resty.Request) {
+		req.SetContext(ctx).SetQueryParams(map[string]string{
 			"item":   "files",
 			"action": "index",
 		})

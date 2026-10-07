@@ -1,7 +1,7 @@
 package lanzou
 
 import (
-	"bytes"
+	"encoding/hex"
 	"fmt"
 	"net/http"
 	"regexp"
@@ -118,39 +118,33 @@ func RemoveJSComment(data string) string {
 	return result.String()
 }
 
-var findAcwScV2Reg = regexp.MustCompile(`arg1='([0-9A-Z]+)'`)
+var findAcwScV2Reg = regexp.MustCompile(`(?i)(?:^|[^\w$])arg1\s*=\s*(?:'([0-9a-f]{40})'|"([0-9a-f]{40})")`)
 
 // 在页面被过多访问或其他情况下，有时候会先返回一个加密的页面，其执行计算出一个acw_sc__v2后放入页面后再重新访问页面才能获得正常页面
 // 若该页面进行了js加密，则进行解密，计算acw_sc__v2，并加入cookie
 func CalcAcwScV2(html string) (string, error) {
 	log.Debugln("acw_sc__v2", html)
 	acwScV2s := findAcwScV2Reg.FindStringSubmatch(html)
-	if len(acwScV2s) != 2 {
-		return "", fmt.Errorf("无法匹配acw_sc__v2")
+	if len(acwScV2s) != 3 {
+		return "", fmt.Errorf("无法匹配acw_sc__v2: arg1 must contain exactly 40 hexadecimal digits")
 	}
-	return HexXor(Unbox(acwScV2s[1]), "3000176000856006061501533003690027800375"), nil
-}
+	arg1 := acwScV2s[1]
+	if arg1 == "" {
+		arg1 = acwScV2s[2]
+	}
 
-func Unbox(hex string) string {
-	var box = []int{6, 28, 34, 31, 33, 18, 30, 23, 9, 8, 19, 38, 17, 24, 0, 5, 32, 21, 10, 22, 25, 14, 15, 3, 16, 27, 13, 35, 2, 29, 11, 26, 4, 36, 1, 39, 37, 7, 20, 12}
-	var newBox = make([]byte, len(hex))
-	for i := 0; i < len(box); i++ {
-		j := box[i]
-		if len(newBox) > j {
-			newBox[j] = hex[i]
-		}
+	var unboxed [40]byte
+	for i, j := range [...]int{6, 28, 34, 31, 33, 18, 30, 23, 9, 8, 19, 38, 17, 24, 0, 5, 32, 21, 10, 22, 25, 14, 15, 3, 16, 27, 13, 35, 2, 29, 11, 26, 4, 36, 1, 39, 37, 7, 20, 12} {
+		unboxed[j] = arg1[i]
 	}
-	return string(newBox)
-}
-
-func HexXor(hex1, hex2 string) string {
-	out := bytes.NewBuffer(make([]byte, len(hex1)))
-	for i := 0; i < len(hex1) && i < len(hex2); i += 2 {
-		v1, _ := strconv.ParseInt(hex1[i:i+2], 16, 64)
-		v2, _ := strconv.ParseInt(hex2[i:i+2], 16, 64)
-		out.WriteString(strconv.FormatInt(v1^v2, 16))
+	var decoded [20]byte
+	if _, err := hex.Decode(decoded[:], unboxed[:]); err != nil {
+		return "", fmt.Errorf("invalid acw_sc__v2 arg1: %w", err)
 	}
-	return out.String()
+	for i, mask := range [...]byte{0x30, 0x00, 0x17, 0x60, 0x00, 0x85, 0x60, 0x06, 0x06, 0x15, 0x01, 0x53, 0x30, 0x03, 0x69, 0x00, 0x27, 0x80, 0x03, 0x75} {
+		decoded[i] ^= mask
+	}
+	return hex.EncodeToString(decoded[:]), nil
 }
 
 var findDataReg = regexp.MustCompile(`data[:\s]+({[^}]+})`)    // 查找json

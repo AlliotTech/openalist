@@ -34,6 +34,10 @@ jobs:
       - name: Test
         run: go test -tags="${{ matrix.tags }}" ./...
 
+      - name: Test Lanzou request concurrency
+        if: matrix.tags == ''
+        run: go test -race ./drivers/lanzou
+
   build:
     needs: test
     strategy:
