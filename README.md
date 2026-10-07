@@ -143,6 +143,7 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md) before submitting a pull request.
 - Report reproducible bugs through [GitHub Issues](https://github.com/AlliotTech/openalist/issues).
 - Use the [documentation](https://alist.iots.vip/) for deployment and storage setup.
 - Include the OpenAList version, deployment method, relevant logs, and reproduction steps in bug reports.
+- LanZou account login handles `acw_sc__v2` verification automatically. If initialization still fails, report the failing endpoint and error without sharing your password or cookies.
 
 ## Related Repositories
 

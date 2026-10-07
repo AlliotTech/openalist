@@ -3,6 +3,7 @@ package lanzou
 import (
 	"context"
 	"net/http"
+	"sync"
 
 	"github.com/AlliotTech/openalist/drivers/base"
 	"github.com/AlliotTech/openalist/internal/driver"
@@ -17,6 +18,11 @@ type LanZou struct {
 	model.Storage
 	uid string
 	vei string
+
+	clientOnce   sync.Once
+	client       *resty.Client
+	uploadOnce   sync.Once
+	uploadClient *resty.Client
 
 	flag int32
 }
@@ -35,7 +41,7 @@ func (d *LanZou) Init(ctx context.Context) (err error) {
 	}
 	switch d.Type {
 	case "account":
-		_, err := d.Login()
+		_, err := d.Login(ctx)
 		if err != nil {
 			return err
 		}
@@ -44,7 +50,7 @@ func (d *LanZou) Init(ctx context.Context) (err error) {
 		if d.RootFolderID == "" {
 			d.RootFolderID = "-1"
 		}
-		d.vei, d.uid, err = d.getVeiAndUid()
+		d.vei, d.uid, err = d.getVeiAndUid(ctx)
 	}
 	return
 }
