@@ -116,7 +116,7 @@ func (d *LanZou) request(url string, method string, callback base.ReqCallback, u
 
 func (d *LanZou) Login(ctx context.Context) ([]*http.Cookie, error) {
 	client := d.getClient(false)
-	loginClient := base.NewRestyClient().SetRedirectPolicy(resty.NoRedirectPolicy()).
+	loginClient := base.NewRestyClient().SetRedirectPolicy(resty.DomainCheckRedirectPolicy("up.woozooo.com")).
 		SetTransport(client.GetClient().Transport).SetCookieJar(client.GetClient().Jar)
 	resp, err := d.execute(loginClient, loginURL, http.MethodPost, func(req *resty.Request) {
 		req.SetContext(ctx).SetFormData(map[string]string{

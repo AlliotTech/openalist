@@ -249,7 +249,28 @@ func TestInitCancellation(t *testing.T) {
 	}
 }
 
-func TestLoginDoesNotFollowRedirects(t *testing.T) {
+func TestLoginFollowsSameHostRedirect(t *testing.T) {
+	requests := 0
+	d := newAuthTestDriver(t, func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		if r.URL.String() == loginURL {
+			http.Redirect(w, r, "./myfile.php", http.StatusFound)
+			return
+		}
+		if r.URL.Host != "up.woozooo.com" || r.URL.Path != "/myfile.php" {
+			t.Fatalf("unexpected redirected login request: %s", r.URL)
+		}
+		fmt.Fprint(w, `{"zt":1}`)
+	})
+	if _, err := d.Login(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if requests != 2 {
+		t.Fatalf("login requests = %d, want 2", requests)
+	}
+}
+
+func TestLoginDoesNotFollowCrossHostRedirect(t *testing.T) {
 	requests := 0
 	d := newAuthTestDriver(t, func(w http.ResponseWriter, r *http.Request) {
 		requests++
@@ -259,7 +280,7 @@ func TestLoginDoesNotFollowRedirects(t *testing.T) {
 		http.Redirect(w, r, "https://share.woozooo.com/target", http.StatusFound)
 	})
 	if _, err := d.Login(context.Background()); err == nil {
-		t.Fatal("redirected login unexpectedly succeeded")
+		t.Fatal("cross-host login redirect unexpectedly succeeded")
 	}
 	if requests == 0 {
 		t.Fatal("login did not reach the transport")
