@@ -9,6 +9,7 @@ import (
 	"crypto/sha1"
 	"crypto/x509"
 	"encoding/hex"
+	"encoding/json"
 	"encoding/pem"
 	"encoding/xml"
 	"fmt"
@@ -19,6 +20,7 @@ import (
 	"time"
 
 	"github.com/AlliotTech/openalist/internal/model"
+	"github.com/AlliotTech/openalist/pkg/utils"
 	"github.com/AlliotTech/openalist/pkg/utils/random"
 )
 
@@ -81,13 +83,19 @@ func timestamp() int64 {
 }
 
 func MustParseTime(str string) *time.Time {
-	lastOpTime, _ := time.ParseInLocation("2006-01-02 15:04:05 -07", str+" +08", time.Local)
+	lastOpTime, _ := parseTime(str)
 	return &lastOpTime
 }
 
 type Time time.Time
 
-func (t *Time) UnmarshalJSON(b []byte) error { return t.Unmarshal(b) }
+func (t *Time) UnmarshalJSON(b []byte) error {
+	var s string
+	if err := json.Unmarshal(b, &s); err != nil {
+		return err
+	}
+	return t.Unmarshal([]byte(s))
+}
 func (t *Time) UnmarshalXML(e *xml.Decoder, ee xml.StartElement) error {
 	b, err := e.Token()
 	if err != nil {
@@ -101,17 +109,32 @@ func (t *Time) UnmarshalXML(e *xml.Decoder, ee xml.StartElement) error {
 	return e.Skip()
 }
 func (t *Time) Unmarshal(b []byte) error {
-	bs := strings.Trim(string(b), "\"")
-	var v time.Time
+	value := strings.Trim(string(b), `"`)
+	value = strings.ReplaceAll(value, "\u202f", " ")
+	value = strings.ReplaceAll(value, "\u00a0", " ")
+	var parsed time.Time
 	var err error
-	for _, f := range []string{"2006-01-02 15:04:05 -07", "Jan 2, 2006 15:04:05 PM -07"} {
-		v, err = time.ParseInLocation(f, bs+" +08", time.Local)
-		if err == nil {
-			break
+	for _, candidate := range []string{value, value + " +08"} {
+		for _, layout := range []string{
+			"2006-01-02 15:04:05 -07",
+			"Jan 2, 2006 3:04:05 PM -07",
+			"Jan 2, 2006, 3:04:05 PM -07",
+		} {
+			parsed, err = time.ParseInLocation(layout, candidate, utils.CNLoc)
+			if err == nil {
+				*t = Time(parsed)
+				return nil
+			}
 		}
 	}
-	*t = Time(v)
+	*t = Time(parsed)
 	return err
+}
+
+func parseTime(value string) (time.Time, error) {
+	var parsed Time
+	err := parsed.Unmarshal([]byte(value))
+	return time.Time(parsed), err
 }
 
 type String string

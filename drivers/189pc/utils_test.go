@@ -45,3 +45,16 @@ paramId = "param-value"
 		t.Fatalf("parsed legacy params = %+v", param)
 	}
 }
+
+func TestParseTime(t *testing.T) {
+	cases := []string{
+		"2026-10-17 16:44:12",
+		"Oct 17, 2026 4:44:12 PM",
+		"Oct 17, 2026, 4:44:12\u202fPM +08",
+	}
+	for _, value := range cases {
+		if _, err := parseTime(value); err != nil {
+			t.Fatalf("parseTime(%q): %v", value, err)
+		}
+	}
+}
