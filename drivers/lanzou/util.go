@@ -133,10 +133,10 @@ func (d *LanZou) Login(ctx context.Context) ([]*http.Cookie, error) {
 	if err != nil {
 		return nil, err
 	}
-	if utils.Json.Get(resp.Body(), "zt").ToInt() != 1 {
+	cookies := client.GetClient().Jar.Cookies(resp.RawResponse.Request.URL)
+	if utils.Json.Get(resp.Body(), "zt").ToInt() != 1 && !isRedirectedLoginSuccess(resp, cookies) {
 		return nil, fmt.Errorf("login err: %s", resp.Body())
 	}
-	cookies := client.GetClient().Jar.Cookies(resp.RawResponse.Request.URL)
 	authCookies := cookies[:0]
 	for _, cookie := range cookies {
 		if cookie.Name != challengeCookie {
@@ -146,6 +146,22 @@ func (d *LanZou) Login(ctx context.Context) ([]*http.Cookie, error) {
 	d.Cookie = CookieToString(authCookies)
 	d.setAccountCookies(authCookies)
 	return authCookies, nil
+}
+
+func isRedirectedLoginSuccess(resp *resty.Response, cookies []*http.Cookie) bool {
+	if resp.StatusCode() < http.StatusOK || resp.StatusCode() >= http.StatusMultipleChoices {
+		return false
+	}
+	u := resp.RawResponse.Request.URL
+	if u.Host != "up.woozooo.com" || u.Path != "/myfile.php" {
+		return false
+	}
+	for _, cookie := range cookies {
+		if cookie.Name == "ylogin" && cookie.Value != "" {
+			return true
+		}
+	}
+	return false
 }
 
 /*

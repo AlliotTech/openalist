@@ -260,7 +260,8 @@ func TestLoginFollowsSameHostRedirect(t *testing.T) {
 		if r.URL.Host != "up.woozooo.com" || r.URL.Path != "/myfile.php" {
 			t.Fatalf("unexpected redirected login request: %s", r.URL)
 		}
-		fmt.Fprint(w, `{"zt":1}`)
+		http.SetCookie(w, &http.Cookie{Name: "ylogin", Value: "authenticated", Path: "/"})
+		fmt.Fprint(w, `<html><body>我的文件</body></html>`)
 	})
 	if _, err := d.Login(context.Background()); err != nil {
 		t.Fatal(err)
