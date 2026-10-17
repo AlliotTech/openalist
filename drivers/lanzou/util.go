@@ -264,8 +264,30 @@ var findSubFolderReg = regexp.MustCompile(`(?i)(?:folderlink|mbxfolder).+href="/
 // 获取下载页面链接
 var findDownPageParamReg = regexp.MustCompile(`<iframe.*?src="(.+?)"`)
 
-// 获取文件ID
-var findFileIDReg = regexp.MustCompile(`'/ajaxm\.php\?file=(\d+)'`)
+// 获取文件ID，蓝奏云同时使用 ajax.php 和 ajaxm.php。
+var findFileIDReg = regexp.MustCompile(`'/ajax(?:file|m)\.php\?file=(\d+)'`)
+
+var (
+	fnDomainReg   = regexp.MustCompile(`var\s+domain[12]\s*=\s*'([^']*(?:ajaxfile|ajaxm)\.php\?file=(\d+)[^']*)'`)
+	fnSignReg     = regexp.MustCompile(`var\s+wp_sign\s*=\s*'([^']*)'`)
+	fnAjaxDataReg = regexp.MustCompile(`var\s+ajaxdata\s*=\s*'([^']*)'`)
+)
+
+func parseFnPage(pageData string) (string, map[string]string, error) {
+	matches := fnDomainReg.FindStringSubmatch(pageData)
+	if len(matches) < 3 {
+		return "", nil, fmt.Errorf("not find fn ajax url")
+	}
+	sign := fnSignReg.FindStringSubmatch(pageData)
+	ajaxdata := fnAjaxDataReg.FindStringSubmatch(pageData)
+	if len(sign) < 2 || len(ajaxdata) < 2 {
+		return "", nil, fmt.Errorf("not find fn sign")
+	}
+	return matches[1], map[string]string{
+		"action": "downprocess", "websignkey": ajaxdata[1], "signs": ajaxdata[1],
+		"sign": sign[1], "websign": "2", "kd": "1", "ves": "1",
+	}, nil
+}
 
 // 获取分享链接主界面
 func (d *LanZou) getShareUrlHtml(shareID string) (string, error) {

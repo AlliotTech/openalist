@@ -178,11 +178,10 @@ func (d *PikPak) login() error {
 	}
 
 	url := d.userURL("/v1/auth/signin")
-	// 使用 用户填写的 CaptchaToken —————— (验证后的captcha_token)
-	if d.GetCaptchaToken() == "" {
-		if err := d.RefreshCaptchaTokenInLogin(GetAction(http.MethodPost, url), d.Username); err != nil {
-			return err
-		}
+	// 登录前清除过期 access token，并始终获取新的验证码 token。
+	d.AccessToken = ""
+	if err := d.RefreshCaptchaTokenInLogin(GetAction(http.MethodPost, url), d.Username); err != nil {
+		return err
 	}
 
 	var e ErrResp
@@ -202,7 +201,12 @@ func (d *PikPak) login() error {
 	data := res.Body()
 	d.RefreshToken = jsoniter.Get(data, "refresh_token").ToString()
 	d.AccessToken = jsoniter.Get(data, "access_token").ToString()
+	if d.AccessToken == "" || d.RefreshToken == "" {
+		return errors.New("login failed: server returned empty tokens")
+	}
 	d.Common.SetUserID(jsoniter.Get(data, "sub").ToString())
+	d.Addition.RefreshToken = d.RefreshToken
+	op.MustSaveDriverStorage(d)
 	return nil
 }
 
@@ -236,9 +240,14 @@ func (d *PikPak) refreshToken(refreshToken string) error {
 		return errors.New(e.Error())
 	}
 	data := res.Body()
+	newRefreshToken := jsoniter.Get(data, "refresh_token").ToString()
+	newAccessToken := jsoniter.Get(data, "access_token").ToString()
+	if newAccessToken == "" || newRefreshToken == "" {
+		return errors.New("refresh failed: server returned empty tokens")
+	}
 	d.Status = "work"
-	d.RefreshToken = jsoniter.Get(data, "refresh_token").ToString()
-	d.AccessToken = jsoniter.Get(data, "access_token").ToString()
+	d.RefreshToken = newRefreshToken
+	d.AccessToken = newAccessToken
 	d.Common.SetUserID(jsoniter.Get(data, "sub").ToString())
 	d.Addition.RefreshToken = d.RefreshToken
 	op.MustSaveDriverStorage(d)
@@ -446,6 +455,9 @@ func (d *PikPak) RefreshCaptchaTokenInLogin(action, username string) error {
 	} else {
 		metas["username"] = username
 	}
+	metas["client_version"] = d.ClientVersion
+	metas["package_name"] = d.PackageName
+	metas["timestamp"], metas["captcha_sign"] = d.Common.GetCaptchaSign()
 	return d.refreshCaptchaToken(action, metas)
 }
 

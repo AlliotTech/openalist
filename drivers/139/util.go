@@ -526,7 +526,7 @@ func (d *Yun139) personalRequest(pathname string, method string, callback base.R
 		"X-Yun-Api-Version":    "v1",
 		"X-Yun-App-Channel":    "10000034",
 		"X-Yun-Channel-Source": "10000034",
-		"X-Yun-Client-Info":    "||9|7.14.0|chrome|120.0.0.0|||windows 10||zh-CN|||dW5kZWZpbmVk||",
+		"X-Yun-Client-Info":    d.yunClientInfo(),
 		"X-Yun-Module-Type":    "100",
 		"X-Yun-Svc-Type":       "1",
 	})
@@ -671,4 +671,12 @@ func (d *Yun139) pickThumbnail(thumbnailURL, bigThumbnailURL string) string {
 		return bigThumbnailURL
 	}
 	return thumbnailURL
+}
+
+func (d *Yun139) yunClientInfo() string {
+	clientType := "9"
+	if d.ClientType == "pc" {
+		clientType = "13"
+	}
+	return "||" + clientType + "|7.14.0|chrome|120.0.0.0|||windows 10||zh-CN|||dW5kZWZpbmVk||"
 }

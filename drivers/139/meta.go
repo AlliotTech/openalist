@@ -8,6 +8,7 @@ import (
 type Addition struct {
 	//Account       string `json:"account" required:"true"`
 	Authorization string `json:"authorization" type:"text" required:"true"`
+	ClientType    string `json:"client_type" type:"select" options:"web,pc" default:"web" help:"Use pc for the larger upload limit"`
 	driver.RootID
 	Type                 string `json:"type" type:"select" options:"personal_new,family,group,personal" default:"personal_new"`
 	CloudID              string `json:"cloud_id"`
