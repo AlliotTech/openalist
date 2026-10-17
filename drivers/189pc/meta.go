@@ -9,6 +9,7 @@ type Addition struct {
 	Username   string `json:"username" required:"true"`
 	Password   string `json:"password" required:"true"`
 	VCode      string `json:"validate_code"`
+	UserFinger string `json:"user_finger" help:"Device fingerprint sent during 189 login"`
 	StripEmoji bool   `json:"strip_emoji" help:"Remove four-byte characters before upload or rename"`
 	driver.RootID
 	OrderBy        string `json:"order_by" type:"select" options:"filename,filesize,lastOpTime" default:"filename"`

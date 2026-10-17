@@ -42,9 +42,10 @@ import (
 
 const (
 	ACCOUNT_TYPE = "02"
-	APP_ID       = "8025431004"
-	CLIENT_TYPE  = "10020"
-	VERSION      = "6.2"
+	// 189 官方 PC 端当前使用的应用 ID；登录和会话换取必须保持一致。
+	APP_ID      = "9317140619"
+	CLIENT_TYPE = "10020"
+	VERSION     = "7.2.4.0"
 
 	WEB_URL    = "https://cloud.189.cn"
 	AUTH_URL   = "https://open.e.189.cn"
@@ -292,16 +293,12 @@ func (y *Cloud189PC) login() (err error) {
 	// 初始化登陆所需参数
 	if y.loginParam == nil {
 		if err = y.initLoginParam(); err != nil {
-			// 验证码也通过错误返回
 			return err
 		}
 	}
 	defer func() {
-		// 销毁验证码
 		y.VCode = ""
-		// 销毁登陆参数
 		y.loginParam = nil
-		// 遇到错误，重新加载登陆参数(刷新验证码)
 		if err != nil && y.NoUseOcr {
 			if err1 := y.initLoginParam(); err1 != nil {
 				err = fmt.Errorf("err1: %s \nerr2: %s", err, err1)
@@ -313,19 +310,19 @@ func (y *Cloud189PC) login() (err error) {
 	var loginresp LoginResp
 	_, err = y.client.R().
 		ForceContentType("application/json;charset=UTF-8").SetResult(&loginresp).
-		SetHeaders(map[string]string{
-			"REQID": param.ReqId,
-			"lt":    param.Lt,
-		}).
+		SetHeaders(y.loginHeaders(*param)).
 		SetFormData(map[string]string{
+			"version":      "v2.0",
+			"apToken":      "",
 			"appKey":       APP_ID,
+			"pageKey":      "normal",
 			"accountType":  ACCOUNT_TYPE,
 			"userName":     param.RsaUsername,
 			"password":     param.RsaPassword,
+			"epd":          param.RsaPassword,
 			"validateCode": y.VCode,
 			"captchaToken": param.CaptchaToken,
 			"returnUrl":    RETURN_URL,
-			// "mailSuffix":   "@189.cn",
 			"dynamicCheck": "FALSE",
 			"clientType":   CLIENT_TYPE,
 			"cb_SaveName":  "1",
@@ -337,38 +334,50 @@ func (y *Cloud189PC) login() (err error) {
 	if err != nil {
 		return err
 	}
-	if loginresp.ToUrl == "" {
-		return fmt.Errorf("login failed,No toUrl obtained, msg: %s", loginresp.Msg)
+	if loginresp.Result != 0 || loginresp.ToUrl == "" {
+		return fmt.Errorf("login failed, msg: %s", loginresp.Msg)
 	}
 
-	// 获取Session
 	var erron RespErr
 	var tokenInfo AppSessionResp
 	_, err = y.client.R().
 		SetResult(&tokenInfo).SetError(&erron).
 		SetQueryParams(clientSuffix()).
-		SetQueryParam("redirectURL", url.QueryEscape(loginresp.ToUrl)).
+		SetQueryParam("redirectURL", loginresp.ToUrl).
 		Post(API_URL + "/getSessionForPC.action")
 	if err != nil {
-		return
+		return err
 	}
-
 	if erron.HasError() {
 		return &erron
 	}
 	if tokenInfo.ResCode != 0 {
-		err = fmt.Errorf("%s", tokenInfo.ResMessage)
-		return
+		return errors.New(tokenInfo.ResMessage)
 	}
 	y.tokenInfo = &tokenInfo
-	return
+	return nil
 }
 
-/* 初始化登陆需要的参数
-*  如果遇到验证码返回错误
- */
+// loginHeaders 统一携带新版 logbox 要求的请求头。user-finger 在同一存储中保持稳定。
+func (y *Cloud189PC) loginHeaders(param LoginParam) map[string]string {
+	if y.UserFinger == "" {
+		y.UserFinger = uuid.NewString()
+		op.MustSaveDriverStorage(y)
+	}
+	referer := param.Referer
+	if referer == "" {
+		referer = AUTH_URL
+	}
+	return map[string]string{
+		"REQID":       param.ReqId,
+		"lt":          param.Lt,
+		"user-finger": y.UserFinger,
+		"Referer":     referer,
+	}
+}
+
+/* 初始化登陆需要的参数。兼容新版将 lt/reqId 放在重定向 URL 的登录页。 */
 func (y *Cloud189PC) initLoginParam() error {
-	// 清除cookie
 	jar, _ := cookiejar.New(nil)
 	y.client.SetCookieJar(jar)
 
@@ -384,32 +393,42 @@ func (y *Cloud189PC) initLoginParam() error {
 		return err
 	}
 
-	param := LoginParam{
-		CaptchaToken: regexp.MustCompile(`'captchaToken' value='(.+?)'`).FindStringSubmatch(res.String())[1],
-		Lt:           regexp.MustCompile(`lt = "(.+?)"`).FindStringSubmatch(res.String())[1],
-		ParamId:      regexp.MustCompile(`paramId = "(.+?)"`).FindStringSubmatch(res.String())[1],
-		ReqId:        regexp.MustCompile(`reqId = "(.+?)"`).FindStringSubmatch(res.String())[1],
-		// jRsaKey:      regexp.MustCompile(`"j_rsaKey" value="(.+?)"`).FindStringSubmatch(res.String())[1],
+	param, parseErr := parseLoginParam(res)
+	if parseErr != nil {
+		return parseErr
+	}
+	if param.ParamId == "" {
+		var appConf AppConfResp
+		_, err = y.client.R().
+			SetHeaders(y.loginHeaders(param)).
+			ForceContentType("application/json;charset=UTF-8").SetResult(&appConf).
+			SetFormData(map[string]string{"version": "2.0", "appKey": APP_ID}).
+			Post(AUTH_URL + "/api/logbox/oauth2/appConf.do")
+		if err != nil {
+			return err
+		}
+		if !appConf.Succeeded() || appConf.Data.ParamId == "" {
+			return fmt.Errorf("failed to get the login paramId: %s", appConf.Msg)
+		}
+		param.ParamId = appConf.Data.ParamId
 	}
 
-	// 获取rsa公钥
 	var encryptConf EncryptConfResp
 	_, err = y.client.R().
+		SetHeaders(y.loginHeaders(param)).
 		ForceContentType("application/json;charset=UTF-8").SetResult(&encryptConf).
 		SetFormData(map[string]string{"appId": APP_ID}).
 		Post(AUTH_URL + "/api/logbox/config/encryptConf.do")
 	if err != nil {
 		return err
 	}
-
 	param.jRsaKey = fmt.Sprintf("-----BEGIN PUBLIC KEY-----\n%s\n-----END PUBLIC KEY-----", encryptConf.Data.PubKey)
 	param.RsaUsername = encryptConf.Data.Pre + RsaEncrypt(param.jRsaKey, y.Username)
 	param.RsaPassword = encryptConf.Data.Pre + RsaEncrypt(param.jRsaKey, y.Password)
 	y.loginParam = &param
 
-	// 判断是否需要验证码
 	resp, err := y.client.R().
-		SetHeader("REQID", param.ReqId).
+		SetHeaders(y.loginHeaders(param)).
 		SetFormData(map[string]string{
 			"appKey":      APP_ID,
 			"accountType": ACCOUNT_TYPE,
@@ -422,7 +441,6 @@ func (y *Cloud189PC) initLoginParam() error {
 		return nil
 	}
 
-	// 拉取验证码
 	imgRes, err := y.client.R().
 		SetQueryParams(map[string]string{
 			"token": param.CaptchaToken,
@@ -446,11 +464,56 @@ func (y *Cloud189PC) initLoginParam() error {
 				return nil
 			}
 		}
-
-		// 返回验证码图片给前端
 		return fmt.Errorf(`need img validate code: <img src="data:image/png;base64,%s"/>`, base64.StdEncoding.EncodeToString(imgRes.Body()))
 	}
 	return nil
+}
+
+func parseLoginParam(res *resty.Response) (LoginParam, error) {
+	if res == nil || res.RawResponse == nil || res.RawResponse.Request == nil {
+		return LoginParam{}, errors.New("no login page response")
+	}
+	finalURL := res.RawResponse.Request.URL
+	param, err := parseLoginParamURL(finalURL)
+	if err == nil {
+		return param, nil
+	}
+	return parseLoginParamPage(res.String())
+}
+
+func parseLoginParamURL(finalURL *url.URL) (LoginParam, error) {
+	if finalURL == nil {
+		return LoginParam{}, errors.New("no login page URL")
+	}
+	query := finalURL.Query()
+	param := LoginParam{Lt: query.Get("lt"), ReqId: query.Get("reqId"), Referer: finalURL.String()}
+	if param.Lt == "" || param.ReqId == "" {
+		return LoginParam{}, errors.New("login page URL has no lt/reqId")
+	}
+	return param, nil
+}
+
+func parseLoginParamPage(body string) (LoginParam, error) {
+	match := func(pattern, name string) (string, error) {
+		m := regexp.MustCompile(pattern).FindStringSubmatch(body)
+		if len(m) < 2 {
+			return "", fmt.Errorf("failed to get %s from the login page", name)
+		}
+		return m[1], nil
+	}
+	param := LoginParam{Referer: AUTH_URL}
+	var err error
+	if param.Lt, err = match(`lt = "(.+?)"`, "lt"); err != nil {
+		return LoginParam{}, err
+	}
+	if param.ReqId, err = match(`reqId = "(.+?)"`, "reqId"); err != nil {
+		return LoginParam{}, err
+	}
+	if param.ParamId, err = match(`paramId = "(.+?)"`, "paramId"); err != nil {
+		return LoginParam{}, err
+	}
+	param.CaptchaToken, _ = match(`'captchaToken' value='(.+?)'`, "captchaToken")
+	return param, nil
 }
 
 // 刷新会话

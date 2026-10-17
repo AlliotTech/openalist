@@ -78,14 +78,39 @@ type LoginParam struct {
 	jRsaKey string
 
 	// 请求头参数
-	Lt    string
-	ReqId string
+	Lt      string
+	ReqId   string
+	Referer string
 
 	// 表单参数
 	ParamId string
 
 	// 验证码
 	CaptchaToken string
+}
+
+// 新版登录页配置。结果字段在不同接口版本中可能是字符串或数字。
+type AppConfResp struct {
+	Result any    `json:"result"`
+	Msg    string `json:"msg"`
+	Data   struct {
+		ParamId string `json:"paramId"`
+	} `json:"data"`
+}
+
+func (r *AppConfResp) Succeeded() bool {
+	switch v := r.Result.(type) {
+	case nil:
+		return true
+	case string:
+		return v == "0" || v == ""
+	case float64:
+		return v == 0
+	case int:
+		return v == 0
+	default:
+		return false
+	}
 }
 
 // 登陆加密相关
