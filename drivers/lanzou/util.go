@@ -1,6 +1,7 @@
 package lanzou
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -134,7 +135,7 @@ func (d *LanZou) Login(ctx context.Context) ([]*http.Cookie, error) {
 		return nil, err
 	}
 	cookies := client.GetClient().Jar.Cookies(resp.RawResponse.Request.URL)
-	if utils.Json.Get(resp.Body(), "zt").ToInt() != 1 && !isRedirectedLoginSuccess(resp, cookies) {
+	if utils.Json.Get(resp.Body(), "zt").ToInt() != 1 && !isRedirectedLoginSuccess(resp) {
 		return nil, fmt.Errorf("login err: %s", resp.Body())
 	}
 	authCookies := cookies[:0]
@@ -148,7 +149,7 @@ func (d *LanZou) Login(ctx context.Context) ([]*http.Cookie, error) {
 	return authCookies, nil
 }
 
-func isRedirectedLoginSuccess(resp *resty.Response, cookies []*http.Cookie) bool {
+func isRedirectedLoginSuccess(resp *resty.Response) bool {
 	if resp.StatusCode() < http.StatusOK || resp.StatusCode() >= http.StatusMultipleChoices {
 		return false
 	}
@@ -156,12 +157,8 @@ func isRedirectedLoginSuccess(resp *resty.Response, cookies []*http.Cookie) bool
 	if u.Host != "up.woozooo.com" || u.Path != "/myfile.php" {
 		return false
 	}
-	for _, cookie := range cookies {
-		if cookie.Name == "ylogin" && cookie.Value != "" {
-			return true
-		}
-	}
-	return false
+	body := resp.Body()
+	return bytes.Contains(body, []byte("myfile.php")) && bytes.Contains(body, []byte("文件"))
 }
 
 /*
