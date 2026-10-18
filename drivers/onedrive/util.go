@@ -1,14 +1,12 @@
 package onedrive
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	stdpath "path"
-	"time"
 
 	"github.com/AlliotTech/openalist/drivers/base"
 	"github.com/AlliotTech/openalist/internal/driver"
@@ -201,17 +199,18 @@ func (d *Onedrive) upBig(ctx context.Context, dstDir model.Obj, stream model.Fil
 	if err != nil {
 		return err
 	}
-	uploadUrl := jsoniter.Get(res, "uploadUrl").ToString()
-	var finish int64 = 0
-	DEFAULT := d.ChunkSize * 1024 * 1024
-	retryCount := 0
-	maxRetries := 3
+	uploadURL := jsoniter.Get(res, "uploadUrl").ToString()
+	if uploadURL == "" {
+		return errors.New("onedrive: upload session response has no upload URL")
+	}
+	var finish int64
+	chunkSize := d.ChunkSize * 1024 * 1024
 	for finish < stream.GetSize() {
 		if utils.IsCanceled(ctx) {
 			return ctx.Err()
 		}
 		left := stream.GetSize() - finish
-		byteSize := min(left, DEFAULT)
+		byteSize := min(left, chunkSize)
 		utils.Log.Debugf("[Onedrive] upload range: %d-%d/%d", finish, finish+byteSize-1, stream.GetSize())
 		byteData := make([]byte, byteSize)
 		n, err := io.ReadFull(stream, byteData)
@@ -219,39 +218,11 @@ func (d *Onedrive) upBig(ctx context.Context, dstDir model.Obj, stream model.Fil
 		if err != nil {
 			return err
 		}
-		req, err := http.NewRequest("PUT", uploadUrl, driver.NewLimitedUploadStream(ctx, bytes.NewReader(byteData)))
-		if err != nil {
-			return err
+		if err := base.UploadChunk(ctx, base.HttpClient, uploadURL, byteData, finish, stream.GetSize()); err != nil {
+			return fmt.Errorf("onedrive: upload range %d-%d: %w", finish, finish+byteSize-1, err)
 		}
-		req = req.WithContext(ctx)
-		req.ContentLength = byteSize
-		// req.Header.Set("Content-Length", strconv.Itoa(int(byteSize)))
-		req.Header.Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", finish, finish+byteSize-1, stream.GetSize()))
-		res, err := base.HttpClient.Do(req)
-		if err != nil {
-			return err
-		}
-		// https://learn.microsoft.com/zh-cn/onedrive/developer/rest-api/api/driveitem_createuploadsession
-		switch {
-		case res.StatusCode >= 500 && res.StatusCode <= 504:
-			retryCount++
-			if retryCount > maxRetries {
-				res.Body.Close()
-				return fmt.Errorf("upload failed after %d retries due to server errors, error %d", maxRetries, res.StatusCode)
-			}
-			backoff := time.Duration(1<<retryCount) * time.Second
-			utils.Log.Warnf("[Onedrive] server errors %d while uploading, retrying after %v...", res.StatusCode, backoff)
-			time.Sleep(backoff)
-		case res.StatusCode != 201 && res.StatusCode != 202 && res.StatusCode != 200:
-			data, _ := io.ReadAll(res.Body)
-			res.Body.Close()
-			return errors.New(string(data))
-		default:
-			res.Body.Close()
-			retryCount = 0
-			finish += byteSize
-			up(float64(finish) * 100 / float64(stream.GetSize()))
-		}
+		finish += byteSize
+		up(float64(finish) * 100 / float64(stream.GetSize()))
 	}
 	return nil
 }
