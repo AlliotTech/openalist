@@ -10,6 +10,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/AlliotTech/openalist/internal/conf"
 	"github.com/AlliotTech/openalist/internal/model"
@@ -40,11 +42,16 @@ func isSymlinkDir(f fs.FileInfo, path string) bool {
 
 // sanitizeFilePath validates a path before passing it to ffmpeg or ffprobe.
 // The external tools receive the path as a command-line argument, so requiring
-// an absolute regular file and rejecting line/NUL controls provides a defensive
-// boundary without rejecting valid filenames containing shell metacharacters.
+// an absolute regular file and rejecting control characters provides a
+// defensive boundary without rejecting valid filenames containing shell
+// metacharacters. A fixed blacklist of control characters is not enough, since
+// an attacker can pick alternatives the list did not anticipate, so every
+// Unicode control character is rejected.
 func sanitizeFilePath(path string) (string, error) {
-	if strings.ContainsAny(path, "\n\r\x00") {
-		return "", fmt.Errorf("file path contains invalid characters")
+	for _, r := range path {
+		if r == utf8.RuneError || unicode.IsControl(r) {
+			return "", fmt.Errorf("file path contains invalid characters")
+		}
 	}
 	cleaned := filepath.Clean(path)
 	if !filepath.IsAbs(cleaned) {
