@@ -68,8 +68,11 @@ func (d *Local) GetSnapshot(videoPath string) (imgData *bytes.Buffer, err error)
 	}
 	videoPath = sanitized
 
-	// Run ffprobe to get the video duration
-	jsonOutput, err := ffmpeg.Probe(videoPath)
+	// Run ffprobe to get the video duration.
+	// Restrict ffprobe to the local file protocol: a crafted path must not be
+	// able to make it fetch remote resources or read other files through
+	// alternate protocols (http, concat, subfile, pipe, ...).
+	jsonOutput, err := ffmpeg.Probe(videoPath, ffmpeg.KwArgs{"protocol_whitelist": "file"})
 	if err != nil {
 		return nil, err
 	}
@@ -111,7 +114,9 @@ func (d *Local) GetSnapshot(videoPath string) (imgData *bytes.Buffer, err error)
 	// the seek process.
 	stream := ffmpeg.Input(videoPath, ffmpeg.KwArgs{"ss": ss, "noaccurate_seek": ""}).
 		Output("pipe:", ffmpeg.KwArgs{"vframes": 1, "format": "image2", "vcodec": "mjpeg"}).
-		GlobalArgs("-loglevel", "error").Silent(true).
+		GlobalArgs("-loglevel", "error").
+		GlobalArgs("-protocol_whitelist", "file"). // local files only, same reason as above
+		Silent(true).
 		WithOutput(srcBuf, os.Stdout)
 	if err = stream.Run(); err != nil {
 		return nil, err
