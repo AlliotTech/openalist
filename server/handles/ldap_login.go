@@ -150,7 +150,7 @@ func dial(ldapServer string) (*ldap.Conn, error) {
 	}
 
 	if tlsEnabled {
-		return ldap.DialTLS("tcp", ldapServer, &tls.Config{InsecureSkipVerify: true})
+		return ldap.DialTLS("tcp", ldapServer, &tls.Config{InsecureSkipVerify: conf.Conf.TlsInsecureSkipVerify})
 	} else {
 		return ldap.Dial("tcp", ldapServer)
 	}
