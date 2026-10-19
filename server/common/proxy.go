@@ -78,6 +78,16 @@ func Proxy(w http.ResponseWriter, r *http.Request, link *model.Link, file model.
 		defer res.Body.Close()
 
 		maps.Copy(w.Header(), res.Header)
+		// Keep the upstream Content-Type as-is: some drivers proxy content
+		// (e.g. a .webp thumbnail) that legitimately differs from what the
+		// file name would suggest, and overwriting it here breaks previews.
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		// Without an explicit Content-Disposition the browser renders the
+		// response inline in the app origin. Never let script-capable types
+		// do that: force a download instead.
+		if !isInlineSafeContentType(w.Header().Get("Content-Type")) {
+			w.Header().Set("Content-Disposition", utils.GenerateContentDisposition(file.GetName()))
+		}
 		w.WriteHeader(res.StatusCode)
 		if r.Method == http.MethodHead {
 			return nil
@@ -95,6 +105,24 @@ func attachHeader(w http.ResponseWriter, file model.Obj) {
 	w.Header().Set("Content-Disposition", utils.GenerateContentDisposition(fileName))
 	w.Header().Set("Content-Type", utils.GetMimeType(fileName))
 	w.Header().Set("Etag", GetEtag(file))
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+}
+
+// inlineUnsafeContentTypes are MIME types that browsers render as active
+// content (script execution) when served without Content-Disposition:
+// attachment.
+var inlineUnsafeContentTypes = map[string]bool{
+	"text/html":             true,
+	"application/xhtml+xml": true,
+	"image/svg+xml":         true,
+}
+
+// isInlineSafeContentType reports whether contentType may be served without
+// forcing a download.
+func isInlineSafeContentType(contentType string) bool {
+	base, _, _ := strings.Cut(contentType, ";")
+	base = strings.ToLower(strings.TrimSpace(base))
+	return !inlineUnsafeContentTypes[base]
 }
 func GetEtag(file model.Obj) string {
 	hash := ""
