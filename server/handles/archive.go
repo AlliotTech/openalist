@@ -245,11 +245,16 @@ func FsArchiveDecompress(c *gin.Context) {
 		common.ErrorResp(c, errs.PermissionDenied, 403)
 		return
 	}
+	srcDir, err := user.JoinPath(req.SrcDir)
+	if err != nil {
+		common.ErrorResp(c, err, 403)
+		return
+	}
 	srcPaths := make([]string, 0, len(req.Name))
 	for _, name := range req.Name {
-		srcPath, err := user.JoinPath(stdpath.Join(req.SrcDir, name))
+		srcPath, err := utils.JoinUnderBase(srcDir, name)
 		if err != nil {
-			common.ErrorResp(c, err, 403)
+			common.ErrorResp(c, err, 400)
 			return
 		}
 		srcPaths = append(srcPaths, srcPath)

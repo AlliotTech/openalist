@@ -96,3 +96,41 @@ func CheckRelativePath(path string) (string, error) {
 func GetFullPath(mountPath, path string) string {
 	return stdpath.Join(GetActualMountPath(mountPath), path)
 }
+
+// ValidateNameComponent validates a single path component before it is used
+// to build a storage path. It rejects empty names, dot segments, separators,
+// ".." sequences and NUL bytes, so a crafted name cannot walk out of the
+// directory it is joined to.
+func ValidateNameComponent(name string) error {
+	if name == "" {
+		return errs.InvalidName
+	}
+	if name == "." || name == ".." {
+		return errs.InvalidName
+	}
+	if strings.Contains(name, "/") || strings.Contains(name, "\\") {
+		return errs.InvalidName
+	}
+	if strings.Contains(name, "..") {
+		return errs.InvalidName
+	}
+	if strings.ContainsRune(name, 0) {
+		return errs.InvalidName
+	}
+	return nil
+}
+
+// JoinUnderBase joins a single name component onto baseDir and verifies the
+// result stays under baseDir after normalization, closing the gap between
+// validating the name and using the joined path.
+func JoinUnderBase(baseDir, name string) (string, error) {
+	if err := ValidateNameComponent(name); err != nil {
+		return "", err
+	}
+	base := FixAndCleanPath(baseDir)
+	joined := FixAndCleanPath(stdpath.Join(base, name))
+	if !IsSubPath(base, joined) {
+		return "", errs.InvalidName
+	}
+	return joined, nil
+}

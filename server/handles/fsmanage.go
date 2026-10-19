@@ -94,14 +94,28 @@ func FsMove(c *gin.Context) {
 	}
 	if !req.Overwrite {
 		for _, name := range req.Names {
-			if res, _ := fs.Get(c, stdpath.Join(dstDir, name), &fs.GetArgs{NoLog: true}); res != nil {
+			dstPath, err := utils.JoinUnderBase(dstDir, name)
+			if err != nil {
+				common.ErrorResp(c, err, 400)
+				return
+			}
+			if res, _ := fs.Get(c, dstPath, &fs.GetArgs{NoLog: true}); res != nil {
 				common.ErrorStrResp(c, fmt.Sprintf("file [%s] exists", name), 403)
 				return
 			}
 		}
 	}
 	for i, name := range req.Names {
-		err := fs.Move(c, stdpath.Join(srcDir, name), dstDir, len(req.Names) > i+1)
+		srcPath, err := utils.JoinUnderBase(srcDir, name)
+		if err != nil {
+			common.ErrorResp(c, err, 400)
+			return
+		}
+		if _, err := utils.JoinUnderBase(dstDir, name); err != nil {
+			common.ErrorResp(c, err, 400)
+			return
+		}
+		err = fs.Move(c, srcPath, dstDir, len(req.Names) > i+1)
 		if err != nil {
 			common.ErrorResp(c, err, 500)
 			return
@@ -141,7 +155,12 @@ func FsCopy(c *gin.Context) {
 	}
 	if !req.Overwrite {
 		for _, name := range req.Names {
-			if res, _ := fs.Get(c, stdpath.Join(dstDir, name), &fs.GetArgs{NoLog: true}); res != nil {
+			dstPath, err := utils.JoinUnderBase(dstDir, name)
+			if err != nil {
+				common.ErrorResp(c, err, 400)
+				return
+			}
+			if res, _ := fs.Get(c, dstPath, &fs.GetArgs{NoLog: true}); res != nil {
 				common.ErrorStrResp(c, fmt.Sprintf("file [%s] exists", name), 403)
 				return
 			}
@@ -149,7 +168,16 @@ func FsCopy(c *gin.Context) {
 	}
 	var addedTasks []task.TaskExtensionInfo
 	for i, name := range req.Names {
-		t, err := fs.Copy(c, stdpath.Join(srcDir, name), dstDir, len(req.Names) > i+1)
+		srcPath, err := utils.JoinUnderBase(srcDir, name)
+		if err != nil {
+			common.ErrorResp(c, err, 400)
+			return
+		}
+		if _, err := utils.JoinUnderBase(dstDir, name); err != nil {
+			common.ErrorResp(c, err, 400)
+			return
+		}
+		t, err := fs.Copy(c, srcPath, dstDir, len(req.Names) > i+1)
 		if t != nil {
 			addedTasks = append(addedTasks, t)
 		}
@@ -169,6 +197,26 @@ type RenameReq struct {
 	Overwrite bool   `json:"overwrite"`
 }
 
+// canRenamePath reports whether a rename may proceed on reqPath.
+// Meta passwords gate reading and downloading, but without this check the
+// object itself could still be renamed, which changes what the protection
+// covers. Returns false and writes the response when the rename is refused.
+func canRenamePath(c *gin.Context, reqPath string) bool {
+	meta, err := op.GetNearestMeta(reqPath)
+	if err != nil {
+		if !errors.Is(errors.Cause(err), errs.MetaNotFound) {
+			common.ErrorResp(c, err, 500, true)
+			return false
+		}
+		return true
+	}
+	if meta != nil && meta.Password != "" && common.IsApply(meta.Path, reqPath, meta.PSub) {
+		common.ErrorStrResp(c, "Path is password-protected and cannot be renamed.", 403)
+		return false
+	}
+	return true
+}
+
 func FsRename(c *gin.Context) {
 	var req RenameReq
 	if err := c.ShouldBind(&req); err != nil {
@@ -177,6 +225,10 @@ func FsRename(c *gin.Context) {
 	}
 	if err := checkRelativePath(req.Name); err != nil {
 		common.ErrorResp(c, err, 403)
+		return
+	}
+	if err := utils.ValidateNameComponent(req.Name); err != nil {
+		common.ErrorResp(c, err, 400)
 		return
 	}
 	user := c.MustGet("user").(*model.User)
@@ -189,8 +241,15 @@ func FsRename(c *gin.Context) {
 		common.ErrorResp(c, err, 403)
 		return
 	}
+	if !canRenamePath(c, reqPath) {
+		return
+	}
 	if !req.Overwrite {
-		dstPath := stdpath.Join(stdpath.Dir(reqPath), req.Name)
+		dstPath, err := utils.JoinUnderBase(stdpath.Dir(reqPath), req.Name)
+		if err != nil {
+			common.ErrorResp(c, err, 400)
+			return
+		}
 		if dstPath != reqPath {
 			if res, _ := fs.Get(c, dstPath, &fs.GetArgs{NoLog: true}); res != nil {
 				common.ErrorStrResp(c, fmt.Sprintf("file [%s] exists", req.Name), 403)
@@ -235,7 +294,12 @@ func FsRemove(c *gin.Context) {
 		return
 	}
 	for _, name := range req.Names {
-		err := fs.Remove(c, stdpath.Join(reqDir, name))
+		removePath, err := utils.JoinUnderBase(reqDir, name)
+		if err != nil {
+			common.ErrorResp(c, err, 400)
+			return
+		}
+		err = fs.Remove(c, removePath)
 		if err != nil {
 			common.ErrorResp(c, err, 500)
 			return

@@ -10,6 +10,7 @@ import (
 	"github.com/AlliotTech/openalist/internal/model"
 	"github.com/AlliotTech/openalist/internal/op"
 	"github.com/AlliotTech/openalist/pkg/generic"
+	"github.com/AlliotTech/openalist/pkg/utils"
 	"github.com/AlliotTech/openalist/server/common"
 	"github.com/gin-gonic/gin"
 	"github.com/pkg/errors"
@@ -185,7 +186,18 @@ func FsBatchRename(c *gin.Context) {
 		if renameObject.SrcName == "" || renameObject.NewName == "" {
 			continue
 		}
-		filePath := fmt.Sprintf("%s/%s", reqPath, renameObject.SrcName)
+		filePath, err := utils.JoinUnderBase(reqPath, renameObject.SrcName)
+		if err != nil {
+			common.ErrorResp(c, err, 400)
+			return
+		}
+		if err := utils.ValidateNameComponent(renameObject.NewName); err != nil {
+			common.ErrorResp(c, err, 400)
+			return
+		}
+		if !canRenamePath(c, filePath) {
+			return
+		}
 		if err := fs.Rename(c, filePath, renameObject.NewName); err != nil {
 			common.ErrorResp(c, err, 500)
 			return
@@ -242,10 +254,21 @@ func FsRegexRename(c *gin.Context) {
 	for _, file := range files {
 
 		if srcRegexp.MatchString(file.GetName()) {
-			filePath := fmt.Sprintf("%s/%s", reqPath, file.GetName())
+			filePath, err := utils.JoinUnderBase(reqPath, file.GetName())
+			if err != nil {
+				common.ErrorResp(c, err, 500)
+				return
+			}
 			newFileName := srcRegexp.ReplaceAllString(file.GetName(), req.NewNameRegex)
 			if err := checkRelativePath(newFileName); err != nil {
 				common.ErrorResp(c, err, 403)
+				return
+			}
+			if err := utils.ValidateNameComponent(newFileName); err != nil {
+				common.ErrorResp(c, err, 400)
+				return
+			}
+			if !canRenamePath(c, filePath) {
 				return
 			}
 			if err := fs.Rename(c, filePath, newFileName); err != nil {
