@@ -29,6 +29,7 @@ import (
 	_ "github.com/AlliotTech/openalist/drivers/dropbox"
 	_ "github.com/AlliotTech/openalist/drivers/febbox"
 	_ "github.com/AlliotTech/openalist/drivers/ftp"
+	_ "github.com/AlliotTech/openalist/drivers/ftps"
 	_ "github.com/AlliotTech/openalist/drivers/github"
 	_ "github.com/AlliotTech/openalist/drivers/github_releases"
 	_ "github.com/AlliotTech/openalist/drivers/google_drive"
