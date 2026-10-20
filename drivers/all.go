@@ -31,6 +31,7 @@ import (
 	_ "github.com/AlliotTech/openalist/drivers/ftp"
 	_ "github.com/AlliotTech/openalist/drivers/github"
 	_ "github.com/AlliotTech/openalist/drivers/github_releases"
+	_ "github.com/AlliotTech/openalist/drivers/gofile"
 	_ "github.com/AlliotTech/openalist/drivers/google_drive"
 	_ "github.com/AlliotTech/openalist/drivers/google_photo"
 	_ "github.com/AlliotTech/openalist/drivers/halalcloud"
