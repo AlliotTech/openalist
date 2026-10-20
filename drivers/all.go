@@ -27,6 +27,7 @@ import (
 	_ "github.com/AlliotTech/openalist/drivers/doubao"
 	_ "github.com/AlliotTech/openalist/drivers/doubao_share"
 	_ "github.com/AlliotTech/openalist/drivers/dropbox"
+	_ "github.com/AlliotTech/openalist/drivers/emby"
 	_ "github.com/AlliotTech/openalist/drivers/febbox"
 	_ "github.com/AlliotTech/openalist/drivers/ftp"
 	_ "github.com/AlliotTech/openalist/drivers/github"
