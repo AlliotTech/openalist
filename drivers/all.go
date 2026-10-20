@@ -48,6 +48,7 @@ import (
 	_ "github.com/AlliotTech/openalist/drivers/onedrive"
 	_ "github.com/AlliotTech/openalist/drivers/onedrive_app"
 	_ "github.com/AlliotTech/openalist/drivers/onedrive_sharelink"
+	_ "github.com/AlliotTech/openalist/drivers/pcloud"
 	_ "github.com/AlliotTech/openalist/drivers/pikpak"
 	_ "github.com/AlliotTech/openalist/drivers/pikpak_share"
 	_ "github.com/AlliotTech/openalist/drivers/quark_uc"
