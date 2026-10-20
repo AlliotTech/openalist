@@ -8,6 +8,7 @@ require (
 	github.com/KirCute/ftpserverlib-pasvportmap v1.25.0
 	github.com/KirCute/sftpd-alist v0.0.12
 	github.com/ProtonMail/go-crypto v1.4.1
+	github.com/ProtonMail/gopenpgp/v2 v2.7.4
 	github.com/SheltonZhu/115driver v1.3.4
 	github.com/Xhofe/go-cache v0.0.0-20240804043513-b1a71927bc21
 	github.com/Xhofe/rateg v0.0.0-20230728072201-251a4e1adad4
@@ -46,6 +47,8 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.3
 	github.com/hekmon/transmissionrpc/v3 v3.0.0
+	github.com/henrybear327/Proton-API-Bridge v1.0.0
+	github.com/henrybear327/go-proton-api v1.0.0
 	github.com/hirochachacha/go-smb2 v1.1.0
 	github.com/ipfs/go-cid v0.6.2
 	github.com/ipfs/go-ipfs-api v0.7.0
@@ -103,6 +106,11 @@ require (
 	github.com/Azure/go-ntlmssp v0.1.1 // indirect
 	github.com/BurntSushi/toml v1.6.0 // indirect
 	github.com/Max-Sum/base32768 v0.0.0-20230304063302-18e6ce5945fd // indirect
+	github.com/ProtonMail/bcrypt v0.0.0-20211005172633-e235017c1baf // indirect
+	github.com/ProtonMail/gluon v0.17.1-0.20230724134000-308be39be96e // indirect
+	github.com/ProtonMail/go-mime v0.0.0-20230322103455-7d82a3887f2f // indirect
+	github.com/ProtonMail/go-srp v0.0.7 // indirect
+	github.com/PuerkitoBio/goquery v1.12.0 // indirect
 	github.com/RoaringBitmap/roaring/v2 v2.14.5 // indirect
 	github.com/STARRY-S/zip v0.2.3 // indirect
 	github.com/abbot/go-http-auth v0.4.0 // indirect
@@ -110,6 +118,7 @@ require (
 	github.com/aead/ecdh v0.2.0 // indirect
 	github.com/andreburgaud/crypt2go v1.8.0 // indirect
 	github.com/andybalholm/brotli v1.2.2 // indirect
+	github.com/andybalholm/cascadia v1.3.4 // indirect
 	github.com/aws/aws-sdk-go v1.55.8 // indirect
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.18 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.18.30 // indirect
@@ -151,6 +160,7 @@ require (
 	github.com/bodgit/plumbing v1.3.0 // indirect
 	github.com/bodgit/windows v1.0.1 // indirect
 	github.com/boombuler/barcode v1.1.0 // indirect
+	github.com/bradenaw/juniper v0.15.3 // indirect
 	github.com/bytedance/gopkg v0.1.4 // indirect
 	github.com/bytedance/sonic v1.15.2 // indirect
 	github.com/bytedance/sonic/loader v0.5.1 // indirect
@@ -167,10 +177,13 @@ require (
 	github.com/coreos/go-semver v0.3.1 // indirect
 	github.com/coreos/go-systemd/v22 v22.6.0 // indirect
 	github.com/crackcomm/go-gitignore v0.0.0-20170627025303-887ab5e44cc3 // indirect
+	github.com/cronokirby/saferith v0.33.1-0.20250226174546-1f11f94ce488 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.1.0 // indirect
 	github.com/dsnet/compress v0.0.2-0.20230904184137-39efe44ab707 // indirect
 	github.com/ebitengine/purego v0.10.1 // indirect
+	github.com/emersion/go-message v0.18.2 // indirect
+	github.com/emersion/go-vcard v0.0.0-20260618161152-d854b7e0e2d3 // indirect
 	github.com/erikgeiser/coninput v0.0.0-20211004153227-1c3628e74d0f // indirect
 	github.com/fclairamb/go-log v0.5.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.9.2 // indirect
@@ -259,6 +272,7 @@ require (
 	github.com/prometheus/procfs v0.21.1 // indirect
 	github.com/quic-go/qpack v0.6.0 // indirect
 	github.com/quic-go/quic-go v0.60.0 // indirect
+	github.com/relvacode/iso8601 v1.7.0 // indirect
 	github.com/rfjakob/eme v1.2.0 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/ryszard/goskiplist v0.0.0-20150312221310-2dfbae5fcf46 // indirect
@@ -299,3 +313,5 @@ require (
 )
 
 // replace github.com/xhofe/115-sdk-go => ../../xhofe/115-sdk-go
+
+replace github.com/ProtonMail/go-proton-api => github.com/henrybear327/go-proton-api v1.0.0

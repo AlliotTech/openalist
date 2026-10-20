@@ -50,6 +50,7 @@ import (
 	_ "github.com/AlliotTech/openalist/drivers/onedrive_sharelink"
 	_ "github.com/AlliotTech/openalist/drivers/pikpak"
 	_ "github.com/AlliotTech/openalist/drivers/pikpak_share"
+	_ "github.com/AlliotTech/openalist/drivers/proton_drive"
 	_ "github.com/AlliotTech/openalist/drivers/quark_uc"
 	_ "github.com/AlliotTech/openalist/drivers/quark_uc_tv"
 	_ "github.com/AlliotTech/openalist/drivers/s3"
