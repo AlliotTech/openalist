@@ -40,6 +40,7 @@ import (
 	_ "github.com/AlliotTech/openalist/drivers/lanzou"
 	_ "github.com/AlliotTech/openalist/drivers/lenovonas_share"
 	_ "github.com/AlliotTech/openalist/drivers/local"
+	_ "github.com/AlliotTech/openalist/drivers/mediafire"
 	_ "github.com/AlliotTech/openalist/drivers/mediatrack"
 	_ "github.com/AlliotTech/openalist/drivers/mega"
 	_ "github.com/AlliotTech/openalist/drivers/misskey"
