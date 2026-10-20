@@ -56,6 +56,7 @@ import (
 	_ "github.com/AlliotTech/openalist/drivers/seafile"
 	_ "github.com/AlliotTech/openalist/drivers/sftp"
 	_ "github.com/AlliotTech/openalist/drivers/smb"
+	_ "github.com/AlliotTech/openalist/drivers/streamtape"
 	_ "github.com/AlliotTech/openalist/drivers/teambition"
 	_ "github.com/AlliotTech/openalist/drivers/terabox"
 	_ "github.com/AlliotTech/openalist/drivers/thunder"
