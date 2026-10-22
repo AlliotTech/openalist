@@ -1,6 +1,6 @@
 module github.com/AlliotTech/openalist
 
-go 1.27.1
+go 1.27.3
 
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.22.0
